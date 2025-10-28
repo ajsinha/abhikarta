@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Execute Agent{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-robot"></i> Execute Agent</h1>
+        <p class="text-muted">Execute agents individually for testing</p>
+    </div>
+</div>
+
+<div class="row">
+    {% for agent in agents %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">{{ agent.name }}</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">{{ agent.description }}</p>
+                <p class="text-muted small">ID: <code>{{ agent.agent_id }}</code></p>
+                <a href="{{ url_for('execute_agent_form', agent_id=agent.agent_id) }}" class="btn btn-primary">
+                    <i class="fas fa-play"></i> Execute
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not agents %}
+<div class="alert alert-info">
+    No agents available for your account. Contact administrator.
+</div>
+{% endif %}
+{% endblock %}

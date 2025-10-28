@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Execute DAG{% endblock %}
+{% block content %}
+<h1><i class="fas fa-play-circle"></i> Execute DAG: {{ dag.name }}</h1>
+<div class="card mt-4">
+    <div class="card-body">
+        <h5>Description</h5>
+        <p>{{ dag.description }}</p>
+        <h5>Nodes</h5>
+        <ul>
+            {% for node in dag.nodes %}
+            <li><strong>{{ node.node_id }}</strong> ({{ node.node_type }})</li>
+            {% endfor %}
+        </ul>
+        <button class="btn btn-primary btn-lg" onclick="executeDag()">
+            <i class="fas fa-play"></i> Start Execution
+        </button>
+    </div>
+</div>
+<script>
+function executeDag() {
+    if (confirm('Start execution of {{ dag.name }}?')) {
+        $.ajax({
+            url: '{{ url_for("api_execute_dag") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({dag_id: '{{ dag.dag_id }}'}),
+            success: function(response) {
+                if (response.success) {
+                    window.location.href = '/workflow/' + response.workflow_id;
+                }
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

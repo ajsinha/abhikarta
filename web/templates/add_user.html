@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Add User{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-user-plus"></i> Add New User</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form id="addUserForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">User ID <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="user_id" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Username <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="username" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-control" name="full_name">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Password <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" name="password" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Role <span class="text-danger">*</span></label>
+                            <select class="form-control" name="role" required>
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <h5 class="mt-4">Permissions</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Approved Tools</label>
+                            <select class="form-control" id="toolsSelect" multiple size="10">
+                                <option value="*">* (All Tools)</option>
+                                {% for tool in all_tools %}
+                                <option value="{{ tool.tool_name }}">{{ tool.tool_name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Approved Agents</label>
+                            <select class="form-control" id="agentsSelect" multiple size="10">
+                                <option value="*">* (All Agents)</option>
+                                {% for agent in all_agents %}
+                                <option value="{{ agent.agent_id }}">{{ agent.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Approved DAGs</label>
+                            <select class="form-control" id="dagsSelect" multiple size="10">
+                                <option value="*">* (All DAGs)</option>
+                                {% for dag in all_dags %}
+                                <option value="{{ dag.dag_id }}">{{ dag.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Add User
+                        </button>
+                        <a href="{{ url_for('users') }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('addUserForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const userData = {
+        user_id: formData.get('user_id'),
+        username: formData.get('username'),
+        password: formData.get('password'),
+        full_name: formData.get('full_name'),
+        email: formData.get('email'),
+        role: formData.get('role'),
+        approved_tools: Array.from(document.getElementById('toolsSelect').selectedOptions).map(o => o.value),
+        approved_agents: Array.from(document.getElementById('agentsSelect').selectedOptions).map(o => o.value),
+        approved_dags: Array.from(document.getElementById('dagsSelect').selectedOptions).map(o => o.value)
+    };
+    
+    $.ajax({
+        url: '{{ url_for("api_add_user") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(userData),
+        success: function(response) {
+            alert('User added successfully!');
+            window.location.href = '{{ url_for("users") }}';
+        },
+        error: function(xhr) {
+            alert('Error: ' + (xhr.responseJSON?.error || 'Failed to add user'));
+        }
+    });
+});
+</script>
+{% endblock %}

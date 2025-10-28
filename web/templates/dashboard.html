@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-home"></i> Dashboard</h1>
+        <p class="text-muted">Welcome back, {{ user.full_name }}!</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-stream"></i> Total Workflows</h5>
+                <h2>{{ total_workflows }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-spinner"></i> Running</h5>
+                <h2>{{ running_workflows }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-check-circle"></i> Completed</h5>
+                <h2>{{ completed_workflows }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-exclamation-circle"></i> Failed</h5>
+                <h2>{{ failed_workflows }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pending HITL Requests Alert -->
+{% if pending_hitl > 0 %}
+<div class="alert alert-warning" role="alert">
+    <i class="fas fa-user-check"></i> <strong>{{ pending_hitl }}</strong> pending HITL request(s) require your attention.
+    <a href="{{ url_for('hitl_requests') }}" class="alert-link">Review now</a>
+</div>
+{% endif %}
+
+<!-- Recent Workflows -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-history"></i> Recent Workflows</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_workflows %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Workflow ID</th>
+                                <th>DAG</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for workflow in recent_workflows %}
+                            <tr>
+                                <td><code>{{ workflow.workflow_id[:8] }}...</code></td>
+                                <td>{{ workflow.dag_id }}</td>
+                                <td>{{ workflow.name or 'N/A' }}</td>
+                                <td>
+                                    {% if workflow.status == 'running' %}
+                                        <span class="badge bg-info">Running</span>
+                                    {% elif workflow.status == 'completed' %}
+                                        <span class="badge bg-success">Completed</span>
+                                    {% elif workflow.status == 'failed' %}
+                                        <span class="badge bg-danger">Failed</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ workflow.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ workflow.created_at[:19] }}</td>
+                                <td>
+                                    <a href="{{ url_for('workflow_detail', workflow_id=workflow.workflow_id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No workflows yet. <a href="{{ url_for('dags') }}">Execute a DAG</a> to get started.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

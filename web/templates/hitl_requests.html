@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}HITL Requests{% endblock %}
+{% block content %}
+<h1><i class="fas fa-user-check"></i> Human-in-the-Loop Requests</h1>
+<div class="card mt-4">
+    <div class="card-body">
+        {% if requests %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr><th>Request ID</th><th>Workflow</th><th>Message</th><th>Created</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for req in requests %}
+                    <tr>
+                        <td><code>{{ req.request_id[:8] }}...</code></td>
+                        <td><a href="{{ url_for('workflow_detail', workflow_id=req.workflow_id) }}">{{ req.workflow_id[:8] }}...</a></td>
+                        <td>{{ req.message }}</td>
+                        <td>{{ req.created_at[:19] }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-success" onclick="approveHITL('{{ req.workflow_id }}', '{{ req.request_id }}')">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="rejectHITL('{{ req.workflow_id }}', '{{ req.request_id }}')">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No pending HITL requests.</p>
+        {% endif %}
+    </div>
+</div>
+<script>
+function approveHITL(workflowId, requestId) {
+    var response = prompt("Enter approval comment (optional):");
+    if (response !== null) {
+        $.ajax({
+            url: '{{ url_for("api_hitl_approve") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({workflow_id: workflowId, request_id: requestId, response: response}),
+            success: function() { location.reload(); },
+            error: function() { alert('Error approving request'); }
+        });
+    }
+}
+function rejectHITL(workflowId, requestId) {
+    var reason = prompt("Enter rejection reason:");
+    if (reason) {
+        $.ajax({
+            url: '{{ url_for("api_hitl_reject") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({workflow_id: workflowId, request_id: requestId, reason: reason}),
+            success: function() { location.reload(); },
+            error: function() { alert('Error rejecting request'); }
+        });
+    }
+}
+</script>
+{% endblock %}

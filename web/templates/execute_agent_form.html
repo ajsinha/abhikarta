@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Execute {{ agent.name }}{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-robot"></i> Execute Agent: {{ agent.name }}</h1>
+        <p class="text-muted">{{ agent.description }}</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Agent Input</h5>
+            </div>
+            <div class="card-body">
+                <form id="agentForm">
+                    <div class="mb-3">
+                        <label class="form-label">Input Data (JSON format)</label>
+                        <textarea class="form-control" id="inputData" rows="10" required>
+{
+  "input": "Your input here"
+}
+                        </textarea>
+                        <small class="text-muted">Provide input data as JSON object</small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-play"></i> Execute Agent
+                    </button>
+                    <a href="{{ url_for('execute_agent_page') }}" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-3" id="resultCard" style="display: none;">
+            <div class="card-header">
+                <h5>Execution Result</h5>
+            </div>
+            <div class="card-body">
+                <pre id="resultContent"></pre>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Agent Details</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Agent ID:</strong> <code>{{ agent.agent_id }}</code></p>
+                <p><strong>Name:</strong> {{ agent.name }}</p>
+                <p><strong>Description:</strong> {{ agent.description }}</p>
+                {% if agent.capabilities %}
+                <p><strong>Capabilities:</strong></p>
+                <ul>
+                    {% for cap in agent.capabilities %}
+                    <li>{{ cap }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('agentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    let inputData;
+    try {
+        inputData = JSON.parse(document.getElementById('inputData').value);
+    } catch (err) {
+        alert('Invalid JSON input: ' + err.message);
+        return;
+    }
+    
+    $.ajax({
+        url: '{{ url_for("api_execute_agent") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            agent_id: '{{ agent.agent_id }}',
+            input: inputData
+        }),
+        success: function(response) {
+            document.getElementById('resultCard').style.display = 'block';
+            document.getElementById('resultContent').textContent = JSON.stringify(response, null, 2);
+        },
+        error: function(xhr) {
+            alert('Error executing agent: ' + (xhr.responseJSON?.error || 'Unknown error'));
+        }
+    });
+});
+</script>
+{% endblock %}
