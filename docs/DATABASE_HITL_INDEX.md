@@ -254,8 +254,9 @@ GROUP BY status;
 ## 🛠️ Quick Start
 
 ### Setting Up Database
+
 ```python
-from core.database import initialize_db
+from db.database import initialize_db
 
 # SQLite (default)
 db = initialize_db(db_type='sqlite', db_path='data/abhikarta.db')

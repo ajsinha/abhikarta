@@ -6,8 +6,8 @@ Helper functions for gathering monitoring statistics
 """
 
 from datetime import datetime, timedelta
-from typing import Dict, List, Any
-from core.database import get_db
+from typing import Dict, Any
+from db.database import get_db
 
 
 class MonitoringService:

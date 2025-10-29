@@ -9,7 +9,7 @@ import json
 import os
 from typing import Dict, List, Optional
 from threading import Lock
-from core.graph import Graph, Node, Edge
+from graph.graph import Graph, Node, Edge
 
 
 class DAGRegistry:

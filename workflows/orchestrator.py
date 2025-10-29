@@ -10,8 +10,8 @@ import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Set
 from threading import Thread, Lock
-from core.graph import Graph, Node, NodeStatus
-from core.database import get_db
+from graph.graph import Graph, Node, NodeStatus
+from db.database import get_db
 from agents.agent_registry import AgentRegistry
 from tools.tool_registry import ToolRegistry
 

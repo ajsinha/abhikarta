@@ -9,7 +9,7 @@ import json
 import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-from core.database import get_db
+from db.database import get_db
 from llm.llm_facade import LLMFacade
 
 

@@ -5,7 +5,7 @@ Run this to add monitoring support for planner
 © 2025-2030 Ashutosh Sinha
 """
 
-from core.database import get_db
+from db.database import get_db
 
 
 def migrate_add_planner_tables():

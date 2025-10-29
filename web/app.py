@@ -9,12 +9,12 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 import os
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import wraps
 
 # Import core modules
 from core.properties_configurator import PropertiesConfigurator
-from core.database import initialize_db, get_db
+from db.database import initialize_db, get_db
 from core.user_registry import UserRegistry
 from agents.agent_registry import AgentRegistry
 from tools.tool_registry import ToolRegistry
@@ -515,7 +515,7 @@ def api_execute_plan(plan_id):
 
     if not graph:
         # Create graph from plan definition
-        from core.graph import Graph, Node, Edge
+        from graph.graph import Graph, Node, Edge
         graph = Graph(
             graph_id=plan['dag_id'],
             name=plan['name'],
