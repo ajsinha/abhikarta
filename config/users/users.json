@@ -15,7 +15,7 @@
       "approved_dags": [
         "*"
       ],
-      "password": "admin"
+      "password": "admin123"
     },
     {
       "user_id": "user1",

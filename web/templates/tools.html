@@ -7,13 +7,23 @@
         <div class="table-responsive">
             <table class="table table-hover">
                 <thead>
-                    <tr><th>Tool Name</th><th>Description</th></tr>
+                    <tr>
+                        <th>Tool Name</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
                 </thead>
                 <tbody>
                     {% for tool in tools %}
                     <tr>
                         <td><code>{{ tool.tool_name }}</code></td>
                         <td>{{ tool.description }}</td>
+                        <td>
+                            <a href="{{ url_for('execute_tool_form', tool_name=tool.tool_name) }}"
+                               class="btn btn-sm btn-primary">
+                                <i class="fas fa-play"></i> Execute
+                            </a>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

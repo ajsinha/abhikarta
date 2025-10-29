@@ -54,6 +54,58 @@
 </div>
 {% endif %}
 
+<!-- MCP Server Status -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-server"></i> MCP Server Status</h5>
+            </div>
+            <div class="card-body">
+                {% if mcp_servers %}
+                <div class="row">
+                    {% for server in mcp_servers %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card border-{{ 'success' if server.status == 'online' else 'danger' }}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0"><i class="fas fa-cube"></i> {{ server.name }}</h6>
+                                    {% if server.status == 'online' %}
+                                        <span class="badge bg-success"><i class="fas fa-check-circle"></i> Online</span>
+                                    {% else %}
+                                        <span class="badge bg-danger"><i class="fas fa-times-circle"></i> Offline</span>
+                                    {% endif %}
+                                </div>
+                                <p class="small text-muted mb-2">
+                                    <i class="fas fa-link"></i> {{ server.url }}
+                                </p>
+                                <div class="small">
+                                    <strong>Tools:</strong> {{ server.tool_count }}
+                                    {% if server.status == 'online' %}
+                                        <br><strong>Response Time:</strong> {{ server.response_time }}ms
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="text-end">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="refreshMCPStatus()">
+                        <i class="fas fa-sync-alt"></i> Refresh Status
+                    </button>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">
+                    <i class="fas fa-info-circle"></i> No MCP servers configured.
+                    Add MCP server configurations to <code>config/mcp/</code> to enable external tool integration.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Recent Workflows -->
 <div class="row">
     <div class="col-12">
@@ -94,7 +146,7 @@
                                 </td>
                                 <td>{{ workflow.created_at[:19] }}</td>
                                 <td>
-                                    <a href="{{ url_for('workflow_detail', workflow_id=workflow.workflow_id) }}" 
+                                    <a href="{{ url_for('workflow_detail', workflow_id=workflow.workflow_id) }}"
                                        class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-eye"></i> View
                                     </a>
@@ -111,4 +163,20 @@
         </div>
     </div>
 </div>
+
+<script>
+function refreshMCPStatus() {
+    const btn = event.target.closest('button');
+    const icon = btn.querySelector('.fa-sync-alt');
+
+    // Add spinning animation
+    icon.classList.add('fa-spin');
+    btn.disabled = true;
+
+    // Reload the page after a short delay
+    setTimeout(function() {
+        location.reload();
+    }, 500);
+}
+</script>
 {% endblock %}

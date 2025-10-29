@@ -124,6 +124,9 @@ def dashboard():
     # Get pending HITL requests
     pending_hitl = orchestrator.get_pending_hitl_requests()
     
+    # Get MCP server status
+    mcp_servers = tool_registry.get_mcp_servers_status()
+
     return render_template('dashboard.html',
                          user=user,
                          total_workflows=total_workflows,
@@ -131,7 +134,8 @@ def dashboard():
                          completed_workflows=completed_workflows,
                          failed_workflows=failed_workflows,
                          recent_workflows=recent_workflows,
-                         pending_hitl=len(pending_hitl))
+                         pending_hitl=len(pending_hitl),
+                         mcp_servers=mcp_servers)
 
 
 @app.route('/agents')

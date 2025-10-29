@@ -1,97 +1,185 @@
 {% extends "base.html" %}
-{% block title %}Execute {{ agent.name }}{% endblock %}
+{% block title %}Execute Agent{% endblock %}
 {% block content %}
 <div class="row mb-4">
     <div class="col">
-        <h1><i class="fas fa-robot"></i> Execute Agent: {{ agent.name }}</h1>
-        <p class="text-muted">{{ agent.description }}</p>
+        <h1><i class="fas fa-robot"></i> Execute Agent</h1>
+        <p class="text-muted">Run agent: <strong>{{ agent.name }}</strong></p>
     </div>
 </div>
 
 <div class="row">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header">
-                <h5>Agent Input</h5>
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-cog"></i> Agent Configuration</h5>
             </div>
             <div class="card-body">
-                <form id="agentForm">
+                <div class="mb-3">
+                    <label class="form-label"><strong>Agent ID:</strong></label>
+                    <p><code>{{ agent.agent_id }}</code></p>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><strong>Description:</strong></label>
+                    <p>{{ agent.description }}</p>
+                </div>
+
+                {% if agent.capabilities %}
+                <div class="mb-3">
+                    <label class="form-label"><strong>Capabilities:</strong></label>
+                    <p>
+                        {% for cap in agent.capabilities %}
+                            <span class="badge bg-secondary">{{ cap }}</span>
+                        {% endfor %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-play"></i> Execute Agent</h5>
+            </div>
+            <div class="card-body">
+                <form id="executeAgentForm">
                     <div class="mb-3">
-                        <label class="form-label">Input Data (JSON format)</label>
-                        <textarea class="form-control" id="inputData" rows="10" required>
-{
-  "input": "Your input here"
-}
-                        </textarea>
-                        <small class="text-muted">Provide input data as JSON object</small>
+                        <label for="inputData" class="form-label">Input Data (JSON):</label>
+                        <textarea
+                            class="form-control font-monospace"
+                            id="inputData"
+                            name="input"
+                            rows="8"
+                            placeholder='{"input": "your input here"}'
+                        >{"input": ""}</textarea>
+                        <div class="form-text">
+                            Provide input data as JSON. The structure depends on the agent's requirements.
+                        </div>
                     </div>
-                    
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-play"></i> Execute Agent
-                    </button>
-                    <a href="{{ url_for('execute_agent_page') }}" class="btn btn-secondary">Cancel</a>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success" id="executeBtn">
+                            <i class="fas fa-play"></i> Execute Agent
+                        </button>
+                        <a href="{{ url_for('agents') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Agents
+                        </a>
+                    </div>
+
+                    <div id="loadingMessage" class="mt-3" style="display: none;">
+                        <div class="alert alert-warning">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Executing agent... Please wait.
+                        </div>
+                    </div>
+
+                    <div id="errorMessage" class="mt-3 alert alert-danger" style="display: none;">
+                    </div>
                 </form>
             </div>
         </div>
-        
-        <div class="card mt-3" id="resultCard" style="display: none;">
-            <div class="card-header">
-                <h5>Execution Result</h5>
+
+        <div class="card mt-4" id="resultCard" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-check-circle"></i> Execution Result</h5>
             </div>
             <div class="card-body">
-                <pre id="resultContent"></pre>
+                <pre id="resultOutput" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"></pre>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
-                <h5>Agent Details</h5>
+                <h6 class="mb-0"><i class="fas fa-info-circle"></i> Tips</h6>
             </div>
             <div class="card-body">
-                <p><strong>Agent ID:</strong> <code>{{ agent.agent_id }}</code></p>
-                <p><strong>Name:</strong> {{ agent.name }}</p>
-                <p><strong>Description:</strong> {{ agent.description }}</p>
-                {% if agent.capabilities %}
-                <p><strong>Capabilities:</strong></p>
-                <ul>
-                    {% for cap in agent.capabilities %}
-                    <li>{{ cap }}</li>
-                    {% endfor %}
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Ensure your JSON is properly formatted
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Check agent documentation for required input fields
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Results will be displayed below after execution
+                    </li>
                 </ul>
-                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-book"></i> Example Input</h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">For Echo Agent:</p>
+                <pre class="bg-light p-2 rounded small">{
+  "input": "Hello World!"
+}</pre>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-document.getElementById('agentForm').addEventListener('submit', function(e) {
+document.getElementById('executeAgentForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    
-    let inputData;
+
+    const inputData = document.getElementById('inputData').value.trim();
+    const executeBtn = document.getElementById('executeBtn');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const errorMessage = document.getElementById('errorMessage');
+    const resultCard = document.getElementById('resultCard');
+    const resultOutput = document.getElementById('resultOutput');
+
+    // Validate JSON
+    let inputJson;
     try {
-        inputData = JSON.parse(document.getElementById('inputData').value);
-    } catch (err) {
-        alert('Invalid JSON input: ' + err.message);
+        inputJson = JSON.parse(inputData);
+    } catch (e) {
+        errorMessage.textContent = 'Invalid JSON: ' + e.message;
+        errorMessage.style.display = 'block';
         return;
     }
-    
+
+    // Show loading state
+    executeBtn.disabled = true;
+    loadingMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    resultCard.style.display = 'none';
+
+    // Execute agent
     $.ajax({
         url: '{{ url_for("api_execute_agent") }}',
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify({
             agent_id: '{{ agent.agent_id }}',
-            input: inputData
+            input: inputJson
         }),
         success: function(response) {
-            document.getElementById('resultCard').style.display = 'block';
-            document.getElementById('resultContent').textContent = JSON.stringify(response, null, 2);
+            resultOutput.textContent = JSON.stringify(response, null, 2);
+            resultCard.style.display = 'block';
+
+            // Scroll to result
+            resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         },
         error: function(xhr) {
-            alert('Error executing agent: ' + (xhr.responseJSON?.error || 'Unknown error'));
+            let errorText = 'Error executing agent';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorText = xhr.responseJSON.error;
+            }
+            errorMessage.textContent = errorText;
+            errorMessage.style.display = 'block';
+        },
+        complete: function() {
+            executeBtn.disabled = false;
+            loadingMessage.style.display = 'none';
         }
     });
 });

@@ -1,95 +1,186 @@
 {% extends "base.html" %}
-{% block title %}Execute {{ tool.tool_name }}{% endblock %}
+{% block title %}Execute Tool{% endblock %}
 {% block content %}
 <div class="row mb-4">
     <div class="col">
-        <h1><i class="fas fa-tools"></i> Execute Tool: {{ tool.tool_name }}</h1>
-        <p class="text-muted">{{ tool.description }}</p>
+        <h1><i class="fas fa-tools"></i> Execute Tool</h1>
+        <p class="text-muted">Run tool: <strong>{{ tool.tool_name }}</strong></p>
     </div>
 </div>
 
 <div class="row">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header">
-                <h5>Tool Parameters</h5>
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-cog"></i> Tool Configuration</h5>
             </div>
             <div class="card-body">
-                <form id="toolForm">
-                    {% if tool.schema.input_schema %}
-                    {% for prop_name, prop_def in tool.schema.input_schema.properties.items() %}
+                <div class="mb-3">
+                    <label class="form-label"><strong>Tool Name:</strong></label>
+                    <p><code>{{ tool.tool_name }}</code></p>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><strong>Description:</strong></label>
+                    <p>{{ tool.description }}</p>
+                </div>
+
+                {% if tool.schema and tool.schema.input_schema %}
+                <div class="mb-3">
+                    <label class="form-label"><strong>Input Schema:</strong></label>
+                    <pre class="bg-light p-2 rounded small">{{ tool.schema.input_schema | tojson(indent=2) }}</pre>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-play"></i> Execute Tool</h5>
+            </div>
+            <div class="card-body">
+                <form id="executeToolForm">
                     <div class="mb-3">
-                        <label class="form-label">{{ prop_name }}
-                            {% if prop_name in tool.schema.input_schema.required %}
-                            <span class="text-danger">*</span>
-                            {% endif %}
-                        </label>
-                        <input type="text" class="form-control" name="{{ prop_name }}" 
-                               placeholder="{{ prop_def.description }}"
-                               {% if prop_name in tool.schema.input_schema.required %}required{% endif %}>
-                        <small class="text-muted">{{ prop_def.description }}</small>
+                        <label for="paramsData" class="form-label">Parameters (JSON):</label>
+                        <textarea
+                            class="form-control font-monospace"
+                            id="paramsData"
+                            name="params"
+                            rows="8"
+                            placeholder='{"param1": "value1", "param2": "value2"}'
+                        >{}</textarea>
+                        <div class="form-text">
+                            Provide tool parameters as JSON. The structure depends on the tool's schema.
+                        </div>
                     </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="mb-3">
-                        <label class="form-label">Input (JSON format)</label>
-                        <textarea class="form-control" name="json_input" rows="5">{}</textarea>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success" id="executeBtn">
+                            <i class="fas fa-play"></i> Execute Tool
+                        </button>
+                        <a href="{{ url_for('tools') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Tools
+                        </a>
                     </div>
-                    {% endif %}
-                    
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-play"></i> Execute Tool
-                    </button>
-                    <a href="{{ url_for('execute_tool_page') }}" class="btn btn-secondary">Cancel</a>
+
+                    <div id="loadingMessage" class="mt-3" style="display: none;">
+                        <div class="alert alert-warning">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Executing tool... Please wait.
+                        </div>
+                    </div>
+
+                    <div id="errorMessage" class="mt-3 alert alert-danger" style="display: none;">
+                    </div>
                 </form>
             </div>
         </div>
-        
-        <div class="card mt-3" id="resultCard" style="display: none;">
-            <div class="card-header">
-                <h5>Execution Result</h5>
+
+        <div class="card mt-4" id="resultCard" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-check-circle"></i> Execution Result</h5>
             </div>
             <div class="card-body">
-                <pre id="resultContent"></pre>
+                <pre id="resultOutput" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-info-circle"></i> Tips</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Ensure your JSON is properly formatted
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Check tool schema for required parameters
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Results will be displayed below after execution
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-book"></i> Example Parameters</h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">For Echo Tool:</p>
+                <pre class="bg-light p-2 rounded small">{
+  "message": "Hello World!"
+}</pre>
+
+                <p class="small text-muted mt-3">For Stock Price Tool:</p>
+                <pre class="bg-light p-2 rounded small">{
+  "symbol": "AAPL"
+}</pre>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-document.getElementById('toolForm').addEventListener('submit', function(e) {
+document.getElementById('executeToolForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const params = {};
-    
-    {% if tool.schema.input_schema %}
-    for (let [key, value] of formData.entries()) {
-        params[key] = value;
-    }
-    {% else %}
+
+    const paramsData = document.getElementById('paramsData').value.trim();
+    const executeBtn = document.getElementById('executeBtn');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const errorMessage = document.getElementById('errorMessage');
+    const resultCard = document.getElementById('resultCard');
+    const resultOutput = document.getElementById('resultOutput');
+
+    // Validate JSON
+    let paramsJson;
     try {
-        params = JSON.parse(formData.get('json_input'));
-    } catch (err) {
-        alert('Invalid JSON input');
+        paramsJson = JSON.parse(paramsData);
+    } catch (e) {
+        errorMessage.textContent = 'Invalid JSON: ' + e.message;
+        errorMessage.style.display = 'block';
         return;
     }
-    {% endif %}
-    
+
+    // Show loading state
+    executeBtn.disabled = true;
+    loadingMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    resultCard.style.display = 'none';
+
+    // Execute tool
     $.ajax({
         url: '{{ url_for("api_execute_tool") }}',
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify({
             tool_name: '{{ tool.tool_name }}',
-            params: params
+            params: paramsJson
         }),
         success: function(response) {
-            document.getElementById('resultCard').style.display = 'block';
-            document.getElementById('resultContent').textContent = JSON.stringify(response, null, 2);
+            resultOutput.textContent = JSON.stringify(response, null, 2);
+            resultCard.style.display = 'block';
+
+            // Scroll to result
+            resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         },
-        error: function() {
-            alert('Error executing tool');
+        error: function(xhr) {
+            let errorText = 'Error executing tool';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorText = xhr.responseJSON.error;
+            }
+            errorMessage.textContent = errorText;
+            errorMessage.style.display = 'block';
+        },
+        complete: function() {
+            executeBtn.disabled = false;
+            loadingMessage.style.display = 'none';
         }
     });
 });
