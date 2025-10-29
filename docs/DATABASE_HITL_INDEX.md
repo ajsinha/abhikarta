@@ -302,8 +302,9 @@ workflow_plan = {
 ```
 
 ### Querying HITL Requests
+
 ```python
-from workflows.orchestrator import WorkflowOrchestrator
+from workflows.dag.orchestrator import WorkflowOrchestrator
 
 orchestrator = WorkflowOrchestrator()
 

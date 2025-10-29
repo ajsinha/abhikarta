@@ -18,9 +18,9 @@ from db.database import initialize_db, get_db
 from core.user_registry import UserRegistry
 from agents.agent_registry import AgentRegistry
 from tools.tool_registry import ToolRegistry
-from workflows.dag_registry import DAGRegistry
-from workflows.orchestrator import WorkflowOrchestrator
-from workflows.planner import Planner, initialize_planner_tables
+from workflows.dag.dag_registry import DAGRegistry
+from workflows.dag.orchestrator import WorkflowOrchestrator
+from workflows.dag.planner import Planner, initialize_planner_tables
 
 
 # Initialize Flask app
