@@ -1,7 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Tools{% endblock %}
 {% block content %}
-<h1><i class="fas fa-tools"></i> Tools</h1>
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-tools"></i> Tools</h1>
+    </div>
+    <div class="col text-end">
+        {% if user.is_admin() %}
+        <a href="{{ url_for('create_tool_page') }}" class="btn btn-success">
+            <i class="fas fa-plus-circle"></i> Create New Tool
+        </a>
+        {% endif %}
+    </div>
+</div>
+
 <div class="card mt-4">
     <div class="card-body">
         <div class="table-responsive">
@@ -10,6 +22,7 @@
                     <tr>
                         <th>Tool Name</th>
                         <th>Description</th>
+                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -19,10 +32,31 @@
                         <td><code>{{ tool.tool_name }}</code></td>
                         <td>{{ tool.description }}</td>
                         <td>
+                            {% if tool.enabled %}
+                                <span class="badge bg-success">Enabled</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Disabled</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             <a href="{{ url_for('execute_tool_form', tool_name=tool.tool_name) }}"
-                               class="btn btn-sm btn-primary">
+                               class="btn btn-sm btn-primary"
+                               {% if not tool.enabled %}disabled{% endif %}>
                                 <i class="fas fa-play"></i> Execute
                             </a>
+                            {% if user.is_admin() %}
+                                {% if tool.enabled %}
+                                    <button class="btn btn-sm btn-warning"
+                                            onclick="toggleTool('{{ tool.tool_name }}', 'disable')">
+                                        <i class="fas fa-power-off"></i> Disable
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-sm btn-success"
+                                            onclick="toggleTool('{{ tool.tool_name }}', 'enable')">
+                                        <i class="fas fa-check"></i> Enable
+                                    </button>
+                                {% endif %}
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -31,4 +65,32 @@
         </div>
     </div>
 </div>
+
+<script>
+function toggleTool(toolName, action) {
+    if (!confirm('Are you sure you want to ' + action + ' this tool?')) {
+        return;
+    }
+
+    $.ajax({
+        url: '{{ url_for("api_toggle_tool") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            tool_name: toolName,
+            action: action
+        }),
+        success: function(response) {
+            if (response.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + (response.error || 'Failed to ' + action + ' tool'));
+            }
+        },
+        error: function() {
+            alert('Error ' + action + 'ing tool');
+        }
+    });
+}
+</script>
 {% endblock %}

@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Create Agent{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-robot"></i> Create New Agent</h1>
+        <p class="text-muted">Add a new agent to the system (Admin Only)</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Agent Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form id="createAgentForm">
+                    <div class="mb-3">
+                        <label for="agentId" class="form-label">Agent ID <span class="text-danger">*</span></label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="agentId"
+                            name="agent_id"
+                            placeholder="e.g., my_custom_agent"
+                            pattern="[a-z_][a-z0-9_]*"
+                            required>
+                        <div class="form-text">
+                            Use lowercase letters, numbers, and underscores only. Must start with a letter or underscore.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="agentName" class="form-label">Agent Name <span class="text-danger">*</span></label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="agentName"
+                            name="name"
+                            placeholder="e.g., My Custom Agent"
+                            required>
+                        <div class="form-text">
+                            Human-readable name for the agent
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="agentDescription" class="form-label">Description <span class="text-danger">*</span></label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="agentDescription"
+                            name="description"
+                            placeholder="Brief description of what this agent does"
+                            required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="agentModule" class="form-label">Module Path <span class="text-danger">*</span></label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="agentModule"
+                            name="module"
+                            placeholder="e.g., agents.my_agent.MyAgentClass"
+                            required>
+                        <div class="form-text">
+                            Python import path to the agent class (e.g., agents.echo_agent.EchoAgent)
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="agentConfig" class="form-label">Configuration (JSON)</label>
+                        <textarea
+                            class="form-control font-monospace"
+                            id="agentConfig"
+                            name="config"
+                            rows="10"
+                            placeholder='{&#10;  "timeout": 30,&#10;  "max_iterations": 10&#10;}'
+                        >{}</textarea>
+                        <div class="form-text">
+                            Additional configuration as JSON. Leave as {} if no extra config needed.
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success" id="createBtn">
+                            <i class="fas fa-plus-circle"></i> Create Agent
+                        </button>
+                        <a href="{{ url_for('agents') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Agents
+                        </a>
+                    </div>
+
+                    <div id="loadingMessage" class="mt-3" style="display: none;">
+                        <div class="alert alert-warning">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Creating agent... Please wait.
+                        </div>
+                    </div>
+
+                    <div id="errorMessage" class="mt-3 alert alert-danger" style="display: none;">
+                    </div>
+
+                    <div id="successMessage" class="mt-3 alert alert-success" style="display: none;">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-info-circle"></i> Requirements</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Agent ID must be unique
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Module path must point to a valid Python class
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Class must extend BaseAgent
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> JSON must be valid
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-book"></i> Example Configuration</h6>
+            </div>
+            <div class="card-body">
+                <p class="small mb-2"><strong>Agent ID:</strong></p>
+                <pre class="bg-light p-2 rounded small">data_processor_agent</pre>
+
+                <p class="small mb-2 mt-3"><strong>Name:</strong></p>
+                <pre class="bg-light p-2 rounded small">Data Processor Agent</pre>
+
+                <p class="small mb-2 mt-3"><strong>Description:</strong></p>
+                <pre class="bg-light p-2 rounded small">Processes and transforms data</pre>
+
+                <p class="small mb-2 mt-3"><strong>Module:</strong></p>
+                <pre class="bg-light p-2 rounded small">agents.data_processor.DataProcessorAgent</pre>
+
+                <p class="small mb-2 mt-3"><strong>Config:</strong></p>
+                <pre class="bg-light p-2 rounded small">{
+  "max_retries": 3,
+  "timeout": 60,
+  "batch_size": 100
+}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('createAgentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const agentId = document.getElementById('agentId').value.trim();
+    const name = document.getElementById('agentName').value.trim();
+    const description = document.getElementById('agentDescription').value.trim();
+    const module = document.getElementById('agentModule').value.trim();
+    const configText = document.getElementById('agentConfig').value.trim();
+
+    const createBtn = document.getElementById('createBtn');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+
+    // Validate JSON
+    let config;
+    try {
+        config = JSON.parse(configText);
+    } catch (e) {
+        errorMessage.textContent = 'Invalid JSON in configuration: ' + e.message;
+        errorMessage.style.display = 'block';
+        return;
+    }
+
+    // Show loading state
+    createBtn.disabled = true;
+    loadingMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    successMessage.style.display = 'none';
+
+    // Submit the request
+    $.ajax({
+        url: '{{ url_for("api_create_agent") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            agent_id: agentId,
+            name: name,
+            description: description,
+            module: module,
+            config: config
+        }),
+        success: function(response) {
+            if (response.success) {
+                successMessage.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <strong>Agent created successfully!</strong><br>
+                    ${response.message}<br>
+                    Redirecting to agents page...
+                `;
+                successMessage.style.display = 'block';
+
+                // Redirect after 2 seconds
+                setTimeout(function() {
+                    window.location.href = "{{ url_for('agents') }}";
+                }, 2000);
+            } else {
+                errorMessage.textContent = 'Error: ' + (response.error || 'Failed to create agent');
+                errorMessage.style.display = 'block';
+            }
+        },
+        error: function(xhr) {
+            let errorText = 'Error creating agent';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorText = xhr.responseJSON.error;
+            }
+            errorMessage.textContent = errorText;
+            errorMessage.style.display = 'block';
+        },
+        complete: function() {
+            createBtn.disabled = false;
+            loadingMessage.style.display = 'none';
+        }
+    });
+});
+
+// Real-time validation for agent ID
+document.getElementById('agentId').addEventListener('input', function(e) {
+    const value = e.target.value;
+    const pattern = /^[a-z_][a-z0-9_]*$/;
+
+    if (value && !pattern.test(value)) {
+        e.target.setCustomValidity('Agent ID must start with lowercase letter or underscore, and contain only lowercase letters, numbers, and underscores');
+    } else {
+        e.target.setCustomValidity('');
+    }
+});
+</script>
+{% endblock %}

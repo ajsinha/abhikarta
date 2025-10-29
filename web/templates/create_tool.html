@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Create Tool{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-tools"></i> Create New Tool</h1>
+        <p class="text-muted">Add a new tool to the system (Admin Only)</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Tool Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form id="createToolForm">
+                    <div class="mb-3">
+                        <label for="toolName" class="form-label">Tool Name <span class="text-danger">*</span></label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="toolName"
+                            name="name"
+                            placeholder="e.g., my_custom_tool"
+                            pattern="[a-z_][a-z0-9_]*"
+                            required>
+                        <div class="form-text">
+                            Use lowercase letters, numbers, and underscores only. Must start with a letter or underscore.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="toolDescription" class="form-label">Description <span class="text-danger">*</span></label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="toolDescription"
+                            name="description"
+                            placeholder="Brief description of what this tool does"
+                            required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="toolModule" class="form-label">Module Path <span class="text-danger">*</span></label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="toolModule"
+                            name="module"
+                            placeholder="e.g., tools.my_tool.MyToolClass"
+                            required>
+                        <div class="form-text">
+                            Python import path to the tool class (e.g., tools.echo_tool.EchoTool)
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="toolConfig" class="form-label">Configuration (JSON)</label>
+                        <textarea
+                            class="form-control font-monospace"
+                            id="toolConfig"
+                            name="config"
+                            rows="10"
+                            placeholder='{&#10;  "timeout": 30,&#10;  "retry_count": 3&#10;}'
+                        >{}</textarea>
+                        <div class="form-text">
+                            Additional configuration as JSON. Leave as {} if no extra config needed.
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success" id="createBtn">
+                            <i class="fas fa-plus-circle"></i> Create Tool
+                        </button>
+                        <a href="{{ url_for('tools') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Tools
+                        </a>
+                    </div>
+
+                    <div id="loadingMessage" class="mt-3" style="display: none;">
+                        <div class="alert alert-warning">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Creating tool... Please wait.
+                        </div>
+                    </div>
+
+                    <div id="errorMessage" class="mt-3 alert alert-danger" style="display: none;">
+                    </div>
+
+                    <div id="successMessage" class="mt-3 alert alert-success" style="display: none;">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-info-circle"></i> Requirements</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Tool name must be unique
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Module path must point to a valid Python class
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> Class must extend BaseTool
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success"></i> JSON must be valid
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-book"></i> Example Configuration</h6>
+            </div>
+            <div class="card-body">
+                <p class="small mb-2"><strong>Name:</strong></p>
+                <pre class="bg-light p-2 rounded small">my_weather_tool</pre>
+
+                <p class="small mb-2 mt-3"><strong>Description:</strong></p>
+                <pre class="bg-light p-2 rounded small">Gets weather information for a location</pre>
+
+                <p class="small mb-2 mt-3"><strong>Module:</strong></p>
+                <pre class="bg-light p-2 rounded small">tools.weather.WeatherTool</pre>
+
+                <p class="small mb-2 mt-3"><strong>Config:</strong></p>
+                <pre class="bg-light p-2 rounded small">{
+  "api_key": "your_api_key",
+  "timeout": 10,
+  "units": "metric"
+}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('createToolForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const toolName = document.getElementById('toolName').value.trim();
+    const description = document.getElementById('toolDescription').value.trim();
+    const module = document.getElementById('toolModule').value.trim();
+    const configText = document.getElementById('toolConfig').value.trim();
+
+    const createBtn = document.getElementById('createBtn');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+
+    // Validate JSON
+    let config;
+    try {
+        config = JSON.parse(configText);
+    } catch (e) {
+        errorMessage.textContent = 'Invalid JSON in configuration: ' + e.message;
+        errorMessage.style.display = 'block';
+        return;
+    }
+
+    // Show loading state
+    createBtn.disabled = true;
+    loadingMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    successMessage.style.display = 'none';
+
+    // Submit the request
+    $.ajax({
+        url: '{{ url_for("api_create_tool") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            name: toolName,
+            description: description,
+            module: module,
+            config: config
+        }),
+        success: function(response) {
+            if (response.success) {
+                successMessage.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <strong>Tool created successfully!</strong><br>
+                    ${response.message}<br>
+                    Redirecting to tools page...
+                `;
+                successMessage.style.display = 'block';
+
+                // Redirect after 2 seconds
+                setTimeout(function() {
+                    window.location.href = "{{ url_for('tools') }}";
+                }, 2000);
+            } else {
+                errorMessage.textContent = 'Error: ' + (response.error || 'Failed to create tool');
+                errorMessage.style.display = 'block';
+            }
+        },
+        error: function(xhr) {
+            let errorText = 'Error creating tool';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorText = xhr.responseJSON.error;
+            }
+            errorMessage.textContent = errorText;
+            errorMessage.style.display = 'block';
+        },
+        complete: function() {
+            createBtn.disabled = false;
+            loadingMessage.style.display = 'none';
+        }
+    });
+});
+
+// Real-time validation for tool name
+document.getElementById('toolName').addEventListener('input', function(e) {
+    const value = e.target.value;
+    const pattern = /^[a-z_][a-z0-9_]*$/;
+
+    if (value && !pattern.test(value)) {
+        e.target.setCustomValidity('Tool name must start with lowercase letter or underscore, and contain only lowercase letters, numbers, and underscores');
+    } else {
+        e.target.setCustomValidity('');
+    }
+});
+</script>
+{% endblock %}

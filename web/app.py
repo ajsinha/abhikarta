@@ -144,11 +144,11 @@ def agents():
     """Agents management page"""
     user = user_registry.get_user(session['user_id'])
     all_agents = agent_registry.list_agents()
-    
+
     # Filter agents based on user access
     if not user.is_admin():
         all_agents = [a for a in all_agents if user.has_agent_access(a['agent_id'])]
-    
+
     return render_template('agents.html', user=user, agents=all_agents)
 
 
@@ -158,11 +158,11 @@ def tools():
     """Tools management page"""
     user = user_registry.get_user(session['user_id'])
     all_tools = tool_registry.list_tools()
-    
+
     # Filter tools based on user access
     if not user.is_admin():
         all_tools = [t for t in all_tools if user.has_tool_access(t['tool_name'])]
-    
+
     return render_template('tools.html', user=user, tools=all_tools)
 
 
@@ -172,11 +172,11 @@ def dags():
     """DAGs management page"""
     user = user_registry.get_user(session['user_id'])
     all_dags = dag_registry.list_dags()
-    
+
     # Filter DAGs based on user access
     if not user.is_admin():
         all_dags = [d for d in all_dags if user.has_dag_access(d['dag_id'])]
-    
+
     return render_template('dags.html', user=user, dags=all_dags)
 
 
@@ -186,10 +186,10 @@ def workflows():
     """Workflows page"""
     user = user_registry.get_user(session['user_id'])
     db = get_db()
-    
+
     # Get all workflows
     all_workflows = db.fetchall("SELECT * FROM workflows ORDER BY created_at DESC")
-    
+
     return render_template('workflows.html', user=user, workflows=all_workflows)
 
 
@@ -198,25 +198,25 @@ def workflows():
 def workflow_detail(workflow_id):
     """Workflow detail page"""
     user = user_registry.get_user(session['user_id'])
-    
+
     status = orchestrator.get_workflow_status(workflow_id)
     if not status:
         flash('Workflow not found', 'danger')
         return redirect(url_for('workflows'))
-    
+
     # Get workflow events
     db = get_db()
     events = db.fetchall(
         "SELECT * FROM workflow_events WHERE workflow_id = ? ORDER BY created_at DESC",
         (workflow_id,)
     )
-    
+
     # Get HITL requests
     hitl_requests = db.fetchall(
         "SELECT * FROM hitl_requests WHERE workflow_id = ?",
         (workflow_id,)
     )
-    
+
     return render_template('workflow_detail.html',
                          user=user,
                          workflow=status['workflow'],
@@ -230,16 +230,16 @@ def workflow_detail(workflow_id):
 def execute_dag(dag_id):
     """Execute DAG page"""
     user = user_registry.get_user(session['user_id'])
-    
+
     if not user.has_dag_access(dag_id):
         flash('Access denied to this DAG', 'danger')
         return redirect(url_for('dags'))
-    
+
     dag_config = dag_registry.get_dag_config(dag_id)
     if not dag_config:
         flash('DAG not found', 'danger')
         return redirect(url_for('dags'))
-    
+
     return render_template('execute_dag.html', user=user, dag=dag_config)
 
 
@@ -249,16 +249,16 @@ def api_execute_dag():
     """API endpoint to execute a DAG"""
     data = request.get_json()
     dag_id = data.get('dag_id')
-    
+
     user = user_registry.get_user(session['user_id'])
     if not user.has_dag_access(dag_id):
         return jsonify({'success': False, 'error': 'Access denied'}), 403
-    
+
     # Create graph from DAG
     graph = dag_registry.create_graph_from_dag(dag_id)
     if not graph:
         return jsonify({'success': False, 'error': 'DAG not found'}), 404
-    
+
     # Create session
     session_id = str(uuid.uuid4())
     db = get_db()
@@ -269,10 +269,10 @@ def api_execute_dag():
         'created_at': datetime.now().isoformat(),
         'metadata': json.dumps({'dag_id': dag_id})
     })
-    
+
     # Start workflow
     workflow_id = orchestrator.start_workflow(dag_id, session_id, user.user_id, graph)
-    
+
     return jsonify({
         'success': True,
         'workflow_id': workflow_id,
@@ -287,7 +287,7 @@ def api_workflow_status(workflow_id):
     status = orchestrator.get_workflow_status(workflow_id)
     if not status:
         return jsonify({'success': False, 'error': 'Workflow not found'}), 404
-    
+
     return jsonify({
         'success': True,
         'workflow': status['workflow'],
@@ -300,9 +300,9 @@ def api_workflow_status(workflow_id):
 def hitl_requests():
     """HITL requests page"""
     user = user_registry.get_user(session['user_id'])
-    
+
     pending_requests = orchestrator.get_pending_hitl_requests()
-    
+
     return render_template('hitl_requests.html', user=user, requests=pending_requests)
 
 
@@ -314,9 +314,9 @@ def api_hitl_approve():
     workflow_id = data.get('workflow_id')
     request_id = data.get('request_id')
     response = data.get('response', 'approved')
-    
+
     success = orchestrator.approve_hitl(workflow_id, request_id, session['user_id'], response)
-    
+
     return jsonify({'success': success})
 
 
@@ -328,9 +328,9 @@ def api_hitl_reject():
     workflow_id = data.get('workflow_id')
     request_id = data.get('request_id')
     reason = data.get('reason', 'rejected')
-    
+
     success = orchestrator.reject_hitl(workflow_id, request_id, session['user_id'], reason)
-    
+
     return jsonify({'success': success})
 
 
@@ -339,13 +339,13 @@ def api_hitl_reject():
 def users():
     """Users management page (admin only)"""
     user = user_registry.get_user(session['user_id'])
-    
+
     if not user.is_admin():
         flash('Access denied. Admin only.', 'danger')
         return redirect(url_for('dashboard'))
-    
+
     all_users = user_registry.get_all_users()
-    
+
     return render_template('users.html', user=user, users=all_users)
 
 
@@ -354,16 +354,16 @@ def users():
 def api_reload_config():
     """API endpoint to reload configuration (admin only)"""
     user = user_registry.get_user(session['user_id'])
-    
+
     if not user.is_admin():
         return jsonify({'success': False, 'error': 'Access denied'}), 403
-    
+
     try:
         user_registry.reload()
         agent_registry.reload()
         tool_registry.reload()
         dag_registry.reload()
-        
+
         return jsonify({'success': True, 'message': 'Configuration reloaded successfully'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -376,16 +376,16 @@ def api_reload_config():
 def planner_page():
     """Planner chat interface"""
     user = user_registry.get_user(session['user_id'])
-    
+
     # Get recent conversations
     conversations = planner.get_conversation_history(user.user_id, limit=20)
-    
+
     # Get user's pending plans
     plans = planner.get_user_plans(user.user_id)
     pending_plans = [p for p in plans if p['status'] == 'pending_approval']
-    
-    return render_template('planner.html', 
-                         user=user, 
+
+    return render_template('planner.html',
+                         user=user,
                          conversations=conversations,
                          pending_plans=pending_plans)
 
@@ -663,6 +663,172 @@ def api_execute_agent():
     result = agent_registry.execute_agent(agent_id, input_data)
 
     return jsonify(result)
+
+
+# ============== AGENT MANAGEMENT ROUTES ==============
+
+@app.route('/create_agent')
+@login_required
+def create_agent_page():
+    """Create agent page (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        flash('Access denied. Admin only.', 'danger')
+        return redirect(url_for('agents'))
+
+    return render_template('create_agent.html', user=user)
+
+
+@app.route('/api/create_agent', methods=['POST'])
+@login_required
+def api_create_agent():
+    """API endpoint to create a new agent (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        return jsonify({'success': False, 'error': 'Access denied. Admin only.'}), 403
+
+    data = request.get_json()
+    result = agent_registry.create_agent_from_json(data)
+
+    return jsonify(result)
+
+
+@app.route('/api/agent/enable/<agent_id>', methods=['POST'])
+@login_required
+def api_enable_agent(agent_id):
+    """API endpoint to enable an agent (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+    if agent_registry.enable_agent(agent_id):
+        return jsonify({'success': True, 'message': f'Agent {agent_id} enabled'})
+    else:
+        return jsonify({'success': False, 'error': 'Failed to enable agent'}), 400
+
+
+@app.route('/api/agent/disable/<agent_id>', methods=['POST'])
+@login_required
+def api_disable_agent(agent_id):
+    """API endpoint to disable an agent (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+    if agent_registry.disable_agent(agent_id):
+        return jsonify({'success': True, 'message': f'Agent {agent_id} disabled'})
+    else:
+        return jsonify({'success': False, 'error': 'Failed to disable agent'}), 400
+
+
+@app.route('/api/toggle_agent', methods=['POST'])
+@login_required
+def api_toggle_agent():
+    """API endpoint to toggle agent enable/disable (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+    data = request.get_json()
+    agent_id = data.get('agent_id')
+    action = data.get('action')  # 'enable' or 'disable'
+
+    if action == 'enable':
+        if agent_registry.enable_agent(agent_id):
+            return jsonify({'success': True, 'message': f'Agent {agent_id} enabled'})
+    elif action == 'disable':
+        if agent_registry.disable_agent(agent_id):
+            return jsonify({'success': True, 'message': f'Agent {agent_id} disabled'})
+
+    return jsonify({'success': False, 'error': 'Failed to toggle agent'}), 400
+
+
+# ============== TOOL MANAGEMENT ROUTES ==============
+
+@app.route('/create_tool')
+@login_required
+def create_tool_page():
+    """Create tool page (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        flash('Access denied. Admin only.', 'danger')
+        return redirect(url_for('tools'))
+
+    return render_template('create_tool.html', user=user)
+
+
+@app.route('/api/create_tool', methods=['POST'])
+@login_required
+def api_create_tool():
+    """API endpoint to create a new tool (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        return jsonify({'success': False, 'error': 'Access denied. Admin only.'}), 403
+
+    data = request.get_json()
+    result = tool_registry.create_tool_from_json(data)
+
+    return jsonify(result)
+
+
+@app.route('/api/tool/enable/<tool_name>', methods=['POST'])
+@login_required
+def api_enable_tool(tool_name):
+    """API endpoint to enable a tool (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+    if tool_registry.enable_tool(tool_name):
+        return jsonify({'success': True, 'message': f'Tool {tool_name} enabled'})
+    else:
+        return jsonify({'success': False, 'error': 'Failed to enable tool'}), 400
+
+
+@app.route('/api/tool/disable/<tool_name>', methods=['POST'])
+@login_required
+def api_disable_tool(tool_name):
+    """API endpoint to disable a tool (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+    if tool_registry.disable_tool(tool_name):
+        return jsonify({'success': True, 'message': f'Tool {tool_name} disabled'})
+    else:
+        return jsonify({'success': False, 'error': 'Failed to disable tool'}), 400
+
+
+@app.route('/api/toggle_tool', methods=['POST'])
+@login_required
+def api_toggle_tool():
+    """API endpoint to toggle tool enable/disable (admin only)"""
+    user = user_registry.get_user(session['user_id'])
+
+    if not user.is_admin():
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+
+    data = request.get_json()
+    tool_name = data.get('tool_name')
+    action = data.get('action')  # 'enable' or 'disable'
+
+    if action == 'enable':
+        if tool_registry.enable_tool(tool_name):
+            return jsonify({'success': True, 'message': f'Tool {tool_name} enabled'})
+    elif action == 'disable':
+        if tool_registry.disable_tool(tool_name):
+            return jsonify({'success': True, 'message': f'Tool {tool_name} disabled'})
+
+    return jsonify({'success': False, 'error': 'Failed to toggle tool'}), 400
 
 
 # ============== USER MANAGEMENT ROUTES ==============

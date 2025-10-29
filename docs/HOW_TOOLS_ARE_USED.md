@@ -1,5 +1,9 @@
 # How Tools Are Used by Planners and Agents in Abhikarta
 
+
+## © 2025-2030 Ashutosh Sinha
+
+
 ## Overview
 
 In the Abhikarta system, **tools are not directly used by agents**. Instead, tools and agents are **separate, independent workflow nodes** that are orchestrated together. The system uses a DAG (Directed Acyclic Graph) based workflow model where both tools and agents are first-class citizens.
@@ -398,3 +402,9 @@ The current design favors explicit, reviewable workflows where users can see exa
 - Security (users approve tool usage)
 - Debugging (clear execution trace)
 - Testing (reproducible workflows)
+
+## Copyright Notice
+
+© 2025 - 2030 Ashutosh Sinha.
+
+All rights reserved. No part of this publication may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the publisher, except in the case of brief quotations embodied in critical reviews and certain other noncommercial uses permitted by copyright law.
