@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}System Monitoring{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-chart-line"></i> System Monitoring</h1>
+        <p class="text-muted">Real-time monitoring and analytics</p>
+    </div>
+</div>
+
+<!-- Quick Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Active Users</h6>
+                        <h2 id="activeUsers">-</h2>
+                    </div>
+                    <i class="fas fa-users fa-3x opacity-50"></i>
+                </div>
+                <small>Last 24 hours</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Workflows</h6>
+                        <h2 id="totalWorkflows">-</h2>
+                    </div>
+                    <i class="fas fa-project-diagram fa-3x opacity-50"></i>
+                </div>
+                <small>Today</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Agent Executions</h6>
+                        <h2 id="agentExecutions">-</h2>
+                    </div>
+                    <i class="fas fa-robot fa-3x opacity-50"></i>
+                </div>
+                <small>Today</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Pending HITL</h6>
+                        <h2 id="pendingHitl">-</h2>
+                    </div>
+                    <i class="fas fa-user-check fa-3x opacity-50"></i>
+                </div>
+                <small>Current</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Monitoring Categories -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-users"></i> User Activity</h5>
+            </div>
+            <div class="card-body">
+                <p>Monitor user logins, sessions, and activity patterns.</p>
+                <a href="{{ url_for('monitoring_users') }}" class="btn btn-primary">
+                    <i class="fas fa-chart-bar"></i> View Details
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-tools"></i> Tools Monitoring</h5>
+            </div>
+            <div class="card-body">
+                <p>Track tool executions, success rates, and performance.</p>
+                <a href="{{ url_for('monitoring_tools') }}" class="btn btn-success">
+                    <i class="fas fa-chart-bar"></i> View Details
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-robot"></i> Agents Monitoring</h5>
+            </div>
+            <div class="card-body">
+                <p>Monitor agent executions, errors, and usage statistics.</p>
+                <a href="{{ url_for('monitoring_agents') }}" class="btn btn-info">
+                    <i class="fas fa-chart-bar"></i> View Details
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-project-diagram"></i> DAGs Monitoring</h5>
+            </div>
+            <div class="card-body">
+                <p>Monitor workflow executions, success rates, and durations.</p>
+                <a href="{{ url_for('monitoring_dags') }}" class="btn btn-warning">
+                    <i class="fas fa-chart-bar"></i> View Details
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="fas fa-brain"></i> Planner Monitoring</h5>
+            </div>
+            <div class="card-body">
+                <p>Track plan generation, approvals, and conversation stats.</p>
+                <a href="{{ url_for('monitoring_planner') }}" class="btn btn-secondary">
+                    <i class="fas fa-chart-bar"></i> View Details
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> System Health</h5>
+            </div>
+            <div class="card-body">
+                <p>Overall system health, errors, and performance metrics.</p>
+                <button class="btn btn-danger" disabled>
+                    <i class="fas fa-chart-bar"></i> Coming Soon
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-history"></i> Recent Activity</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Event</th>
+                        <th>User</th>
+                    </tr>
+                </thead>
+                <tbody id="recentActivity">
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-refresh every 30 seconds
+let autoRefresh = true;
+
+function loadDashboardStats() {
+    $.get('{{ url_for("api_monitoring_dashboard_stats") }}', function(data) {
+        $('#activeUsers').text(data.active_users || 0);
+        $('#totalWorkflows').text(data.workflows_today || 0);
+        $('#agentExecutions').text(data.agent_executions_today || 0);
+        $('#pendingHitl').text(data.pending_hitl || 0);
+
+        // Update recent activity
+        if (data.recent_activity && data.recent_activity.length > 0) {
+            let html = '';
+            data.recent_activity.forEach(function(activity) {
+                html += `<tr>
+                    <td>${activity.time}</td>
+                    <td><span class="badge bg-${activity.type_color}">${activity.type}</span></td>
+                    <td>${activity.event}</td>
+                    <td>${activity.user || '-'}</td>
+                </tr>`;
+            });
+            $('#recentActivity').html(html);
+        } else {
+            $('#recentActivity').html('<tr><td colspan="4" class="text-center text-muted">No recent activity</td></tr>');
+        }
+    }).fail(function() {
+        // If API fails, still show page structure
+        $('#activeUsers').text('N/A');
+        $('#totalWorkflows').text('N/A');
+        $('#agentExecutions').text('N/A');
+        $('#pendingHitl').text('N/A');
+    });
+}
+
+// Initial load
+loadDashboardStats();
+
+// Auto-refresh
+setInterval(function() {
+    if (autoRefresh) {
+        loadDashboardStats();
+    }
+}, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Tools Monitoring{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-tools"></i> Tools Monitoring</h1>
+        <p class="text-muted">Track tool executions, success rates, and performance</p>
+    </div>
+    <div class="col text-end">
+        <a href="{{ url_for('monitoring_dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Today</h6>
+                <h2 id="countToday">-</h2>
+                <small>Tool executions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Last 7 Days</h6>
+                <h2 id="count7Days">-</h2>
+                <small>Tool executions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">All Time</h6>
+                <h2 id="countTotal">-</h2>
+                <small>Total executions</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Rate -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Success Rate (Last 7 Days)</h6>
+                <h2 id="successRate">-</h2>
+                <div class="progress mt-2">
+                    <div id="successRateBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Average Execution Time</h6>
+                <h2 id="avgTime">-</h2>
+                <small>Last 7 days</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Last Hour Activity (10-minute intervals)</h5>
+    </div>
+    <div class="card-body">
+        <canvas id="activityChart" height="80"></canvas>
+    </div>
+</div>
+
+<!-- Tool Statistics -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Tool Statistics</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Tool Name</th>
+                        <th>Status</th>
+                        <th>Total Executions</th>
+                        <th>Success</th>
+                        <th>Failed</th>
+                        <th>Success Rate</th>
+                        <th>Avg Duration</th>
+                    </tr>
+                </thead>
+                <tbody id="toolStatsTable">
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+let activityChart;
+
+function loadToolsMonitoring() {
+    $.get('{{ url_for("api_monitoring_tools") }}', function(data) {
+        // Update summary cards
+        $('#countToday').text(data.today || 0);
+        $('#count7Days').text(data.last_7_days || 0);
+        $('#countTotal').text(data.total || 0);
+
+        // Update success rate
+        const successRate = data.success_rate || 0;
+        $('#successRate').text(successRate.toFixed(1) + '%');
+        $('#successRateBar').css('width', successRate + '%');
+
+        // Update average time
+        $('#avgTime').text(data.avg_time || '0s');
+
+        // Update chart
+        updateChart(data.hourly_data || []);
+
+        // Update tool statistics table
+        if (data.tool_stats && data.tool_stats.length > 0) {
+            let html = '';
+            data.tool_stats.forEach(function(tool) {
+                const successRate = tool.total > 0 ? (tool.success / tool.total * 100).toFixed(1) : 0;
+                html += `<tr>
+                    <td><code>${tool.tool_name}</code></td>
+                    <td><span class="badge bg-${tool.enabled ? 'success' : 'secondary'}">${tool.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                    <td>${tool.total || 0}</td>
+                    <td><span class="text-success">${tool.success || 0}</span></td>
+                    <td><span class="text-danger">${tool.failed || 0}</span></td>
+                    <td>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar bg-success" style="width: ${successRate}%">${successRate}%</div>
+                        </div>
+                    </td>
+                    <td>${tool.avg_duration || '0s'}</td>
+                </tr>`;
+            });
+            $('#toolStatsTable').html(html);
+        } else {
+            $('#toolStatsTable').html('<tr><td colspan="7" class="text-center text-muted">No tool data</td></tr>');
+        }
+    });
+}
+
+function updateChart(hourlyData) {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+
+    if (activityChart) {
+        activityChart.destroy();
+    }
+
+    activityChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: hourlyData.map(d => d.time),
+            datasets: [{
+                label: 'Tool Executions',
+                data: hourlyData.map(d => d.count),
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Initial load
+loadToolsMonitoring();
+
+// Auto-refresh every 30 seconds
+setInterval(loadToolsMonitoring, 30000);
+</script>
+{% endblock %}

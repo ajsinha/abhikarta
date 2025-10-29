@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}User Activity Monitoring{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-users"></i> User Activity Monitoring</h1>
+        <p class="text-muted">Track user logins, sessions, and activity patterns</p>
+    </div>
+    <div class="col text-end">
+        <a href="{{ url_for('monitoring_dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Today</h6>
+                <h2 id="countToday">-</h2>
+                <small>User logins</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Last 7 Days</h6>
+                <h2 id="count7Days">-</h2>
+                <small>User logins</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">All Time</h6>
+                <h2 id="countTotal">-</h2>
+                <small>Total users</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Last Hour Activity (10-minute intervals)</h5>
+    </div>
+    <div class="card-body">
+        <canvas id="activityChart" height="80"></canvas>
+    </div>
+</div>
+
+<!-- Active Sessions -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-desktop"></i> Active Sessions</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Session ID</th>
+                        <th>Started</th>
+                        <th>Last Activity</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="activeSessionsTable">
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- User Statistics -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-bar"></i> User Statistics</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Last Login</th>
+                        <th>Total Sessions</th>
+                        <th>Workflows Created</th>
+                    </tr>
+                </thead>
+                <tbody id="userStatsTable">
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+let activityChart;
+
+function loadUserMonitoring() {
+    $.get('{{ url_for("api_monitoring_users") }}', function(data) {
+        // Update summary cards
+        $('#countToday').text(data.today || 0);
+        $('#count7Days').text(data.last_7_days || 0);
+        $('#countTotal').text(data.total || 0);
+        
+        // Update chart
+        updateChart(data.hourly_data || []);
+        
+        // Update active sessions table
+        if (data.active_sessions && data.active_sessions.length > 0) {
+            let html = '';
+            data.active_sessions.forEach(function(session) {
+                html += `<tr>
+                    <td>${session.username}</td>
+                    <td><code>${session.session_id.substring(0, 8)}...</code></td>
+                    <td>${session.created_at}</td>
+                    <td>${session.updated_at}</td>
+                    <td><span class="badge bg-success">${session.status}</span></td>
+                </tr>`;
+            });
+            $('#activeSessionsTable').html(html);
+        } else {
+            $('#activeSessionsTable').html('<tr><td colspan="5" class="text-center text-muted">No active sessions</td></tr>');
+        }
+        
+        // Update user statistics table
+        if (data.user_stats && data.user_stats.length > 0) {
+            let html = '';
+            data.user_stats.forEach(function(user) {
+                html += `<tr>
+                    <td>${user.username}</td>
+                    <td><span class="badge bg-${user.role === 'admin' ? 'danger' : 'primary'}">${user.role}</span></td>
+                    <td>${user.last_login || 'Never'}</td>
+                    <td>${user.session_count || 0}</td>
+                    <td>${user.workflow_count || 0}</td>
+                </tr>`;
+            });
+            $('#userStatsTable').html(html);
+        } else {
+            $('#userStatsTable').html('<tr><td colspan="5" class="text-center text-muted">No user data</td></tr>');
+        }
+    });
+}
+
+function updateChart(hourlyData) {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+    
+    if (activityChart) {
+        activityChart.destroy();
+    }
+    
+    activityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: hourlyData.map(d => d.time),
+            datasets: [{
+                label: 'User Activity',
+                data: hourlyData.map(d => d.count),
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Initial load
+loadUserMonitoring();
+
+// Auto-refresh every 30 seconds
+setInterval(loadUserMonitoring, 30000);
+</script>
+{% endblock %}

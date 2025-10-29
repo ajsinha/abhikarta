@@ -1,0 +1,38 @@
+<!-- Add this to your base.html navigation -->
+<!-- This snippet shows where to add the Monitoring link in your navbar -->
+
+<!-- In your navbar, add this dropdown -->
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="monitoringDropdown" role="button"
+       data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-chart-line"></i> Monitoring
+    </a>
+    <ul class="dropdown-menu" aria-labelledby="monitoringDropdown">
+        <li><a class="dropdown-item" href="{{ url_for('monitoring_dashboard') }}">
+            <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{{ url_for('monitoring_users') }}">
+            <i class="fas fa-users"></i> User Activity
+        </a></li>
+        <li><a class="dropdown-item" href="{{ url_for('monitoring_tools') }}">
+            <i class="fas fa-tools"></i> Tools
+        </a></li>
+        <li><a class="dropdown-item" href="{{ url_for('monitoring_agents') }}">
+            <i class="fas fa-robot"></i> Agents
+        </a></li>
+        <li><a class="dropdown-item" href="{{ url_for('monitoring_dags') }}">
+            <i class="fas fa-project-diagram"></i> DAGs/Workflows
+        </a></li>
+        <li><a class="dropdown-item" href="{{ url_for('monitoring_planner') }}">
+            <i class="fas fa-brain"></i> Planner
+        </a></li>
+    </ul>
+</li>
+
+<!-- Or as a simple nav link -->
+<li class="nav-item">
+    <a class="nav-link" href="{{ url_for('monitoring_dashboard') }}">
+        <i class="fas fa-chart-line"></i> Monitoring
+    </a>
+</li>

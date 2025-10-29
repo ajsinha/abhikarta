@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block title %}Planner Monitoring{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-brain"></i> Planner Monitoring</h1>
+        <p class="text-muted">Track plan generation, approvals, and conversation statistics</p>
+    </div>
+    <div class="col text-end">
+        <a href="{{ url_for('monitoring_dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Today</h6>
+                <h2 id="countToday">-</h2>
+                <small>Plans generated</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Last 7 Days</h6>
+                <h2 id="count7Days">-</h2>
+                <small>Plans generated</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">All Time</h6>
+                <h2 id="countTotal">-</h2>
+                <small>Total plans</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Plan Status & Conversations -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Approval Rate (Last 7 Days)</h6>
+                <h2 id="approvalRate">-</h2>
+                <div class="progress mt-2">
+                    <div id="approvalRateBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Conversations Today</h6>
+                <h2 id="conversationsToday">-</h2>
+                <small>User interactions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Pending Approval</h6>
+                <h2 id="pendingApproval">-</h2>
+                <small>Awaiting review</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Last Hour Activity (10-minute intervals)</h5>
+    </div>
+    <div class="card-body">
+        <canvas id="activityChart" height="80"></canvas>
+    </div>
+</div>
+
+<!-- Plan Status Distribution -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Plan Status Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Top Users</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Plans</th>
+                                <th>Conversations</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topUsersTable">
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Plans -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list"></i> Recent Plans</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Plan ID</th>
+                        <th>User</th>
+                        <th>Request</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody id="recentPlansTable">
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+let activityChart;
+let statusChart;
+
+function loadPlannerMonitoring() {
+    $.get('{{ url_for("api_monitoring_planner") }}', function(data) {
+        // Update summary cards
+        $('#countToday').text(data.today || 0);
+        $('#count7Days').text(data.last_7_days || 0);
+        $('#countTotal').text(data.total || 0);
+        
+        // Update approval rate
+        const approvalRate = data.approval_rate || 0;
+        $('#approvalRate').text(approvalRate.toFixed(1) + '%');
+        $('#approvalRateBar').css('width', approvalRate + '%');
+        
+        // Update conversations
+        $('#conversationsToday').text(data.conversations_today || 0);
+        $('#pendingApproval').text(data.pending_approval || 0);
+        
+        // Update charts
+        updateActivityChart(data.hourly_data || []);
+        updateStatusChart(data.status_distribution || {});
+        
+        // Update top users table
+        if (data.top_users && data.top_users.length > 0) {
+            let html = '';
+            data.top_users.forEach(function(user) {
+                html += `<tr>
+                    <td>${user.username}</td>
+                    <td>${user.plan_count || 0}</td>
+                    <td>${user.conversation_count || 0}</td>
+                </tr>`;
+            });
+            $('#topUsersTable').html(html);
+        } else {
+            $('#topUsersTable').html('<tr><td colspan="3" class="text-center text-muted">No data</td></tr>');
+        }
+        
+        // Update recent plans table
+        if (data.recent_plans && data.recent_plans.length > 0) {
+            let html = '';
+            data.recent_plans.forEach(function(plan) {
+                const statusColors = {
+                    'pending_approval': 'warning',
+                    'approved': 'success',
+                    'rejected': 'danger',
+                    'executed': 'info'
+                };
+                html += `<tr>
+                    <td><code>${plan.plan_id.substring(0, 12)}...</code></td>
+                    <td>${plan.username}</td>
+                    <td>${plan.request.substring(0, 50)}...</td>
+                    <td><span class="badge bg-${statusColors[plan.status] || 'secondary'}">${plan.status}</span></td>
+                    <td>${plan.created_at}</td>
+                </tr>`;
+            });
+            $('#recentPlansTable').html(html);
+        } else {
+            $('#recentPlansTable').html('<tr><td colspan="5" class="text-center text-muted">No plans</td></tr>');
+        }
+    });
+}
+
+function updateActivityChart(hourlyData) {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+    
+    if (activityChart) {
+        activityChart.destroy();
+    }
+    
+    activityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: hourlyData.map(d => d.time),
+            datasets: [
+                {
+                    label: 'Plans Created',
+                    data: hourlyData.map(d => d.plans),
+                    borderColor: 'rgb(153, 102, 255)',
+                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Conversations',
+                    data: hourlyData.map(d => d.conversations),
+                    borderColor: 'rgb(255, 159, 64)',
+                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateStatusChart(statusData) {
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    
+    if (statusChart) {
+        statusChart.destroy();
+    }
+    
+    statusChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Pending', 'Approved', 'Rejected', 'Executed'],
+            datasets: [{
+                data: [
+                    statusData.pending_approval || 0,
+                    statusData.approved || 0,
+                    statusData.rejected || 0,
+                    statusData.executed || 0
+                ],
+                backgroundColor: [
+                    'rgba(255, 206, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+// Initial load
+loadPlannerMonitoring();
+
+// Auto-refresh every 30 seconds
+setInterval(loadPlannerMonitoring, 30000);
+</script>
+{% endblock %}

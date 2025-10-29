@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}DAGs Monitoring{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-project-diagram"></i> DAGs / Workflows Monitoring</h1>
+        <p class="text-muted">Track workflow executions, success rates, and durations</p>
+    </div>
+    <div class="col text-end">
+        <a href="{{ url_for('monitoring_dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Today</h6>
+                <h2 id="countToday">-</h2>
+                <small>Workflow executions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Last 7 Days</h6>
+                <h2 id="count7Days">-</h2>
+                <small>Workflow executions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">All Time</h6>
+                <h2 id="countTotal">-</h2>
+                <small>Total executions</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Rate & Running -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Success Rate (Last 7 Days)</h6>
+                <h2 id="successRate">-</h2>
+                <div class="progress mt-2">
+                    <div id="successRateBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Currently Running</h6>
+                <h2 id="runningCount">-</h2>
+                <small>Active workflows</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Average Duration</h6>
+                <h2 id="avgDuration">-</h2>
+                <small>Last 7 days</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Last Hour Activity (10-minute intervals)</h5>
+    </div>
+    <div class="card-body">
+        <canvas id="activityChart" height="80"></canvas>
+    </div>
+</div>
+
+<!-- DAG Statistics -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-bar"></i> DAG Statistics</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>DAG ID</th>
+                        <th>Name</th>
+                        <th>Total Runs</th>
+                        <th>Completed</th>
+                        <th>Failed</th>
+                        <th>Running</th>
+                        <th>Success Rate</th>
+                        <th>Avg Duration</th>
+                    </tr>
+                </thead>
+                <tbody id="dagStatsTable">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+let activityChart;
+
+function loadDagsMonitoring() {
+    $.get('{{ url_for("api_monitoring_dags") }}', function(data) {
+        // Update summary cards
+        $('#countToday').text(data.today || 0);
+        $('#count7Days').text(data.last_7_days || 0);
+        $('#countTotal').text(data.total || 0);
+        
+        // Update success rate
+        const successRate = data.success_rate || 0;
+        $('#successRate').text(successRate.toFixed(1) + '%');
+        $('#successRateBar').css('width', successRate + '%');
+        
+        // Update running count
+        $('#runningCount').text(data.running_count || 0);
+        
+        // Update average duration
+        $('#avgDuration').text(data.avg_duration || '0s');
+        
+        // Update chart
+        updateChart(data.hourly_data || []);
+        
+        // Update DAG statistics table
+        if (data.dag_stats && data.dag_stats.length > 0) {
+            let html = '';
+            data.dag_stats.forEach(function(dag) {
+                const successRate = dag.total > 0 ? (dag.completed / dag.total * 100).toFixed(1) : 0;
+                html += `<tr>
+                    <td><code>${dag.dag_id}</code></td>
+                    <td>${dag.name || '-'}</td>
+                    <td>${dag.total || 0}</td>
+                    <td><span class="text-success">${dag.completed || 0}</span></td>
+                    <td><span class="text-danger">${dag.failed || 0}</span></td>
+                    <td><span class="text-info">${dag.running || 0}</span></td>
+                    <td>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar bg-success" style="width: ${successRate}%">${successRate}%</div>
+                        </div>
+                    </td>
+                    <td>${dag.avg_duration || '0s'}</td>
+                </tr>`;
+            });
+            $('#dagStatsTable').html(html);
+        } else {
+            $('#dagStatsTable').html('<tr><td colspan="8" class="text-center text-muted">No DAG data</td></tr>');
+        }
+    });
+}
+
+function updateChart(hourlyData) {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+    
+    if (activityChart) {
+        activityChart.destroy();
+    }
+    
+    activityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: hourlyData.map(d => d.time),
+            datasets: [
+                {
+                    label: 'Started',
+                    data: hourlyData.map(d => d.started),
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Completed',
+                    data: hourlyData.map(d => d.completed),
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Initial load
+loadDagsMonitoring();
+
+// Auto-refresh every 30 seconds
+setInterval(loadDagsMonitoring, 30000);
+</script>
+{% endblock %}
