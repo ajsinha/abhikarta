@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}Create Autonomous Plan{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-project-diagram"></i> Create Autonomous Workflow Plan</h1>
+        <p class="text-muted">Describe your task and let LangGraph AI create an autonomous, self-executing workflow</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-robot"></i> Autonomous Plan Request</h5>
+            </div>
+            <div class="card-body">
+                <form id="createAutonomousPlanForm">
+                    <div class="mb-3">
+                        <label for="requestInput" class="form-label">Describe your task:</label>
+                        <textarea
+                            class="form-control"
+                            id="requestInput"
+                            name="user_request"
+                            rows="6"
+                            placeholder="Example: 'Monitor system logs, detect anomalies, and alert the team if critical issues are found'"
+                            required></textarea>
+                        <div class="form-text">
+                            Be specific about what you want to accomplish. The LangGraph planner will create an autonomous workflow with parallel execution, loops, and human-in-the-loop checkpoints where needed.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Planning Options:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="allowParallel" name="allow_parallel" checked>
+                            <label class="form-check-label" for="allowParallel">
+                                Allow parallel execution
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="allowLoops" name="allow_loops" checked>
+                            <label class="form-check-label" for="allowLoops">
+                                Allow loops and iterations
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="includeHitl" name="include_hitl" checked>
+                            <label class="form-check-label" for="includeHitl">
+                                Include Human-in-the-Loop checkpoints
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="reuseExisting" name="reuse_existing" checked>
+                            <label class="form-check-label" for="reuseExisting">
+                                Reuse existing DAGs when possible
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>About Autonomous Plans:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li><strong>Supervisor Pattern:</strong> Uses LangGraph's supervisor agent to coordinate workflow execution</li>
+                            <li><strong>StateGraph:</strong> Creates a stateful graph that maintains context across steps</li>
+                            <li><strong>Adaptive:</strong> Can dynamically adjust based on intermediate results</li>
+                            <li><strong>Resilient:</strong> Includes error handling and retry logic</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success" id="createBtn">
+                            <i class="fas fa-magic"></i> Create Autonomous Plan
+                        </button>
+                        <a href="{{ url_for('lgraph_planner_page') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to LangGraph Planner
+                        </a>
+                    </div>
+
+                    <div id="loadingMessage" class="mt-3" style="display: none;">
+                        <div class="alert alert-warning">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Creating your autonomous plan... The LangGraph supervisor is analyzing your request and configuring the StateGraph.
+                        </div>
+                    </div>
+
+                    <div id="errorMessage" class="mt-3 alert alert-danger" style="display: none;">
+                    </div>
+
+                    <div id="successMessage" class="mt-3 alert alert-success" style="display: none;">
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-lightbulb"></i> Example Autonomous Workflows</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <a href="#" class="example-link" data-request="Analyze customer sentiment from recent reviews and generate a summary report with insights">
+                            📊 Sentiment Analysis Pipeline
+                        </a>
+                        <br><small class="text-muted">Multi-step: Fetch → Analyze → Summarize → Report</small>
+                    </li>
+                    <li class="mb-2">
+                        <a href="#" class="example-link" data-request="Process incoming orders, validate inventory levels, update database, and send confirmation emails">
+                            🛒 Order Processing Workflow
+                        </a>
+                        <br><small class="text-muted">With conditionals and parallel notifications</small>
+                    </li>
+                    <li class="mb-2">
+                        <a href="#" class="example-link" data-request="Scrape product data from competitor websites, compare prices, and update our pricing database if needed">
+                            🕷️ Competitive Intelligence
+                        </a>
+                        <br><small class="text-muted">Iterative scraping with decision points</small>
+                    </li>
+                    <li class="mb-2">
+                        <a href="#" class="example-link" data-request="Monitor system logs every 5 minutes, detect anomalies using ML, and alert the team if critical issues are found">
+                            🔍 Continuous Monitoring
+                        </a>
+                        <br><small class="text-muted">Loop-based with conditional alerting</small>
+                    </li>
+                    <li class="mb-2">
+                        <a href="#" class="example-link" data-request="Fetch stock market data, run technical analysis, generate trading signals, and create a daily report">
+                            💹 Trading Signal Generator
+                        </a>
+                        <br><small class="text-muted">Data pipeline with analysis and reporting</small>
+                    </li>
+                    <li class="mb-2">
+                        <a href="#" class="example-link" data-request="Aggregate data from multiple APIs, transform and clean the data, load into warehouse, and trigger downstream analytics">
+                            🔄 ETL Pipeline
+                        </a>
+                        <br><small class="text-muted">Complex data transformation workflow</small>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="fas fa-question-circle"></i> How LangGraph Planning Works</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>🎯 Planning Phase</h6>
+                        <ol>
+                            <li>Analyze user request</li>
+                            <li>Identify available agents and tools</li>
+                            <li>Check for reusable DAGs</li>
+                            <li>Design StateGraph structure</li>
+                            <li>Configure supervisor agent</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>⚡ Execution Phase</h6>
+                        <ol>
+                            <li>Initialize StateGraph</li>
+                            <li>Execute nodes in order</li>
+                            <li>Handle parallel branches</li>
+                            <li>Pause at HITL checkpoints</li>
+                            <li>Adapt based on results</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Pre-fill if coming from chat with context
+window.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const request = urlParams.get('request');
+    if (request) {
+        document.getElementById('requestInput').value = decodeURIComponent(request);
+    }
+});
+
+// Handle form submission
+document.getElementById('createAutonomousPlanForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const requestInput = document.getElementById('requestInput');
+    const request = requestInput.value.trim();
+
+    if (!request) {
+        alert('Please enter a request');
+        return;
+    }
+
+    // Gather options
+    const options = {
+        allow_parallel: document.getElementById('allowParallel').checked,
+        allow_loops: document.getElementById('allowLoops').checked,
+        include_hitl: document.getElementById('includeHitl').checked,
+        reuse_existing: document.getElementById('reuseExisting').checked
+    };
+
+    const createBtn = document.getElementById('createBtn');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+
+    // Show loading state
+    createBtn.disabled = true;
+    loadingMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    successMessage.style.display = 'none';
+
+    // Submit the request
+    $.ajax({
+        url: '{{ url_for("api_lgraph_create_plan") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            user_request: request,
+            options: options
+        }),
+        success: function(response) {
+            if (response.success) {
+                successMessage.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <strong>Autonomous plan created successfully!</strong><br>
+                    ${response.message || 'Your LangGraph workflow is ready for review.'}<br>
+                    <div class="mt-2">
+                        <strong>Plan Type:</strong> ${response.plan_type || 'StateGraph'}<br>
+                        <strong>Nodes:</strong> ${response.node_count || 'N/A'}<br>
+                    </div>
+                    <a href="{{ url_for('lgraph_plan_detail', plan_id='PLAN_ID') }}".replace('PLAN_ID', response.plan_id) class="btn btn-sm btn-primary mt-2">
+                        <i class="fas fa-eye"></i> Review Plan
+                    </a>
+                `;
+                successMessage.style.display = 'block';
+
+                // Redirect after 2 seconds
+                setTimeout(function() {
+                    window.location.href = "{{ url_for('lgraph_plan_detail', plan_id='PLAN_ID') }}".replace('PLAN_ID', response.plan_id);
+                }, 2000);
+            } else {
+                errorMessage.textContent = 'Error: ' + (response.error || 'Failed to create autonomous plan');
+                errorMessage.style.display = 'block';
+            }
+        },
+        error: function(xhr) {
+            let errorMsg = 'Error creating autonomous plan. ';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorMsg += xhr.responseJSON.error;
+            } else {
+                errorMsg += 'Please try again.';
+            }
+            errorMessage.textContent = errorMsg;
+            errorMessage.style.display = 'block';
+        },
+        complete: function() {
+            createBtn.disabled = false;
+            loadingMessage.style.display = 'none';
+        }
+    });
+});
+
+// Handle example links
+document.querySelectorAll('.example-link').forEach(function(link) {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const request = this.getAttribute('data-request');
+        document.getElementById('requestInput').value = request;
+        // Scroll to form
+        document.getElementById('requestInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+});
+</script>
+{% endblock %}

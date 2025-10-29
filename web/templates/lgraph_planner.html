@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}LangGraph Planner{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-project-diagram"></i> LangGraph AI Planner</h1>
+        <p class="text-muted">Advanced autonomous workflow planning with LangGraph supervisor pattern</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-comments"></i> Chat with LangGraph Planner</h5>
+            </div>
+            <div class="card-body">
+                <div id="chatMessages" style="height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; background: #f8f9fa;">
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-robot fa-3x mb-3"></i>
+                        <p>Start a conversation with the LangGraph planner...</p>
+                        <small>The planner can analyze your request, evaluate resources, and create autonomous execution plans</small>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="messageInput" class="form-control" placeholder="Describe what you want to accomplish...">
+                    <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn">
+                        <i class="fas fa-paper-plane"></i> Send
+                    </button>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-success" onclick="navigateToCreatePlan()" id="createPlanBtn">
+                        <i class="fas fa-magic"></i> Create Autonomous Plan
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="clearChat()">
+                        <i class="fas fa-eraser"></i> Clear Chat
+                    </button>
+                </div>
+                <div class="mt-3">
+                    <div class="alert alert-info" role="alert">
+                        <strong><i class="fas fa-info-circle"></i> About LangGraph Planner:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Uses supervisor pattern for autonomous planning</li>
+                            <li>Can reuse existing DAGs or create new StateGraphs</li>
+                            <li>Supports parallel execution, loops, and conditionals</li>
+                            <li>Includes HITL (Human-in-the-Loop) checkpoints</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-list"></i> Your Plans</h5>
+            </div>
+            <div class="card-body">
+                {% if pending_plans %}
+                <h6>Pending Approval:</h6>
+                <ul class="list-group mb-3">
+                    {% for plan in pending_plans %}
+                    <li class="list-group-item">
+                        <a href="{{ url_for('lgraph_plan_detail', plan_id=plan.plan_id) }}">
+                            {{ plan.user_request[:50] }}...
+                        </a>
+                        <br><small class="text-muted">{{ plan.created_at[:19] }}</small>
+                        <br>
+                        <span class="badge bg-info">{{ plan.plan_type }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">No pending plans</p>
+                {% endif %}
+
+                {% if approved_plans %}
+                <h6>Approved Plans:</h6>
+                <ul class="list-group mb-3">
+                    {% for plan in approved_plans %}
+                    <li class="list-group-item">
+                        <a href="{{ url_for('lgraph_plan_detail', plan_id=plan.plan_id) }}">
+                            {{ plan.user_request[:50] }}...
+                        </a>
+                        <br><small class="text-muted">{{ plan.created_at[:19] }}</small>
+                        <br>
+                        <span class="badge bg-success">Approved</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-flask"></i> Example Requests</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-sm btn-outline-primary text-start" onclick="fillExample('Analyze customer sentiment from recent reviews and generate a summary report')">
+                        <i class="fas fa-chart-line"></i> Sentiment Analysis
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary text-start" onclick="fillExample('Process incoming orders, validate inventory, and send confirmation emails')">
+                        <i class="fas fa-shopping-cart"></i> Order Processing
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary text-start" onclick="fillExample('Scrape product data from competitors, compare prices, and update our database')">
+                        <i class="fas fa-database"></i> Data Scraping
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary text-start" onclick="fillExample('Monitor system logs, detect anomalies, and alert the team if issues found')">
+                        <i class="fas fa-shield-alt"></i> System Monitoring
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let conversationHistory = [];
+let sessionId = '{{ session_id }}';
+
+function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    // Add to UI
+    addMessageToChat('You', message, true);
+    input.value = '';
+
+    // Disable send button during processing
+    const sendBtn = document.getElementById('sendBtn');
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+    // Add to history
+    conversationHistory.push({role: 'user', content: message});
+
+    // Send to API
+    $.ajax({
+        url: '{{ url_for("api_lgraph_planner_chat") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            message: message,
+            history: conversationHistory,
+            session_id: sessionId
+        }),
+        success: function(response) {
+            conversationHistory.push({role: 'assistant', content: response.response});
+            addMessageToChat('LangGraph Planner', response.response, false);
+
+            // Re-enable send button
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+        },
+        error: function(xhr) {
+            let errorMsg = 'Error communicating with planner';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorMsg += ': ' + xhr.responseJSON.error;
+            }
+            alert(errorMsg);
+
+            // Re-enable send button
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+        }
+    });
+}
+
+function addMessageToChat(sender, message, isUser) {
+    const chatDiv = document.getElementById('chatMessages');
+
+    // Remove placeholder if exists
+    const placeholder = chatDiv.querySelector('.text-center.text-muted');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'mb-3';
+
+    const alignment = isUser ? 'text-end' : 'text-start';
+    const bgClass = isUser ? 'bg-primary text-white' : 'bg-light';
+    const senderClass = isUser ? 'text-primary' : 'text-success';
+
+    msgDiv.innerHTML = `
+        <div class="${alignment}">
+            <strong class="${senderClass}">${sender}:</strong>
+            <div class="${bgClass} p-2 rounded d-inline-block" style="max-width: 70%;">
+                ${message}
+            </div>
+        </div>
+    `;
+
+    chatDiv.appendChild(msgDiv);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+}
+
+function navigateToCreatePlan() {
+    // Get the user's most recent request from conversation
+    const userMessages = conversationHistory.filter(msg => msg.role === 'user');
+
+    if (userMessages.length === 0) {
+        // No conversation yet, just navigate to the create page
+        window.location.href = '{{ url_for("create_autonomous_plan_page") }}';
+    } else {
+        // Get the last user message and pass it as context
+        const lastUserMessage = userMessages[userMessages.length - 1].content;
+        window.location.href = '{{ url_for("create_autonomous_plan_page") }}?request=' + encodeURIComponent(lastUserMessage);
+    }
+}
+
+function clearChat() {
+    if (confirm('Clear the current conversation?')) {
+        conversationHistory = [];
+        const chatDiv = document.getElementById('chatMessages');
+        chatDiv.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-robot fa-3x mb-3"></i>
+                <p>Start a conversation with the LangGraph planner...</p>
+                <small>The planner can analyze your request, evaluate resources, and create autonomous execution plans</small>
+            </div>
+        `;
+    }
+}
+
+function fillExample(text) {
+    document.getElementById('messageInput').value = text;
+    document.getElementById('messageInput').focus();
+}
+
+// Enter key to send
+document.getElementById('messageInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+</script>
+{% endblock %}

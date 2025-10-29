@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}LangGraph Workflow Detail{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-stream"></i> LangGraph Workflow Detail</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('lgraph_planner_page') }}">LangGraph Planner</a></li>
+                <li class="breadcrumb-item active">Workflow {{ workflow.workflow_id[:8] }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-info-circle"></i> Workflow Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th width="200">Workflow ID:</th>
+                        <td><code>{{ workflow.workflow_id }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Plan ID:</th>
+                        <td>
+                            <a href="{{ url_for('lgraph_plan_detail', plan_id=workflow.plan_id) }}">
+                                <code>{{ workflow.plan_id }}</code>
+                            </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            {% if workflow.status == 'running' %}
+                                <span class="badge bg-info">Running</span>
+                            {% elif workflow.status == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                            {% elif workflow.status == 'failed' %}
+                                <span class="badge bg-danger">Failed</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ workflow.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Started At:</th>
+                        <td>{{ workflow.started_at }}</td>
+                    </tr>
+                    {% if workflow.completed_at %}
+                    <tr>
+                        <th>Completed At:</th>
+                        <td>{{ workflow.completed_at }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-tasks"></i> Execution Steps</h5>
+            </div>
+            <div class="card-body">
+                {% if workflow.steps %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Step ID</th>
+                                <th>Success</th>
+                                <th>Executed At</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for step in workflow.steps %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td><code>{{ step.step_id }}</code></td>
+                                <td>
+                                    {% if step.success %}
+                                        <span class="badge bg-success"><i class="fas fa-check"></i></span>
+                                    {% else %}
+                                        <span class="badge bg-danger"><i class="fas fa-times"></i></span>
+                                    {% endif %}
+                                </td>
+                                <td><small>{{ step.executed_at }}</small></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary" 
+                                            data-bs-toggle="collapse" 
+                                            data-bs-target="#step-{{ loop.index }}">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
+                                    <div id="step-{{ loop.index }}" class="collapse mt-2">
+                                        <pre class="bg-light p-2 small"><code>{{ step.result }}</code></pre>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No execution steps recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if workflow.results %}
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-check-circle"></i> Final Results</h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 rounded"><code>{{ workflow.results | tojson(indent=2) }}</code></pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Progress</h5>
+            </div>
+            <div class="card-body">
+                {% if workflow.steps %}
+                <div class="mb-3">
+                    <strong>Steps Completed:</strong> {{ workflow.steps | length }}
+                </div>
+                <div class="mb-3">
+                    <strong>Success Rate:</strong>
+                    {% set successful = workflow.steps | selectattr('success') | list | length %}
+                    {% set total = workflow.steps | length %}
+                    {% set rate = (successful / total * 100) | int if total > 0 else 0 %}
+                    {{ rate }}%
+                </div>
+                <div class="progress">
+                    <div class="progress-bar bg-success" role="progressbar" 
+                         style="width: {{ rate }}%" 
+                         aria-valuenow="{{ rate }}" aria-valuemin="0" aria-valuemax="100">
+                        {{ rate }}%
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">Workflow is initializing...</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-tools"></i> Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="location.reload()">
+                        <i class="fas fa-sync"></i> Refresh Status
+                    </button>
+                    <a href="{{ url_for('lgraph_plan_detail', plan_id=workflow.plan_id) }}" 
+                       class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Plan
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

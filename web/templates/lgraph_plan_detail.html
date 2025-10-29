@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+{% block title %}Plan Details - {{ plan.plan_id }}{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-project-diagram"></i> Autonomous Plan Details</h1>
+        <p class="text-muted">Review and manage your LangGraph workflow plan</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-info-circle"></i> Plan Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th style="width: 200px;">Plan ID:</th>
+                        <td><code>{{ plan.plan_id }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Plan Type:</th>
+                        <td>
+                            <span class="badge bg-info">{{ plan.plan_type }}</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            {% if plan.status == 'pending_approval' %}
+                            <span class="badge bg-warning">Pending Approval</span>
+                            {% elif plan.status == 'approved' %}
+                            <span class="badge bg-success">Approved</span>
+                            {% elif plan.status == 'rejected' %}
+                            <span class="badge bg-danger">Rejected</span>
+                            {% elif plan.status == 'executing' %}
+                            <span class="badge bg-primary">Executing</span>
+                            {% elif plan.status == 'completed' %}
+                            <span class="badge bg-success">Completed</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ plan.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>User Request:</th>
+                        <td>{{ plan.user_request }}</td>
+                    </tr>
+                    <tr>
+                        <th>Created:</th>
+                        <td>{{ plan.created_at }}</td>
+                    </tr>
+                    {% if plan.plan.name %}
+                    <tr>
+                        <th>Name:</th>
+                        <td>{{ plan.plan.name }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if plan.plan.description %}
+                    <tr>
+                        <th>Description:</th>
+                        <td>{{ plan.plan.description }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+
+        {% if plan.plan.state_schema %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-database"></i> State Schema</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Input:</strong>
+                        <p class="text-muted">{{ plan.plan.state_schema.input }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Output:</strong>
+                        <p class="text-muted">{{ plan.plan.state_schema.output }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Intermediate States:</strong>
+                        <p class="text-muted">{{ plan.plan.state_schema.intermediate_states | join(', ') }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-sitemap"></i> Workflow Nodes</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Node ID</th>
+                                <th>Type</th>
+                                <th>Agent/Tool</th>
+                                <th>Dependencies</th>
+                                <th>Special Config</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for node in plan.plan.nodes %}
+                            <tr>
+                                <td><code>{{ node.node_id }}</code></td>
+                                <td>
+                                    {% if node.node_type == 'supervisor' %}
+                                    <span class="badge bg-primary">Supervisor</span>
+                                    {% elif node.node_type == 'hitl' %}
+                                    <span class="badge bg-warning">HITL</span>
+                                    {% elif node.node_type == 'conditional' %}
+                                    <span class="badge bg-info">Conditional</span>
+                                    {% elif node.node_type == 'agent' %}
+                                    <span class="badge bg-success">Agent</span>
+                                    {% elif node.node_type == 'tool' %}
+                                    <span class="badge bg-secondary">Tool</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ node.agent_id or node.tool_name or '-' }}
+                                </td>
+                                <td>
+                                    {% if node.dependencies %}
+                                    {{ node.dependencies | join(', ') }}
+                                    {% else %}
+                                    <span class="text-muted">None</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if node.parallel_group %}
+                                    <span class="badge bg-info">Parallel: {{ node.parallel_group }}</span>
+                                    {% endif %}
+                                    {% if node.loop_config %}
+                                    <span class="badge bg-warning">Loop</span>
+                                    {% endif %}
+                                    {% if node.hitl_config %}
+                                    <span class="badge bg-danger">Approval Required</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% if plan.plan.edges %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-code-branch"></i> Workflow Edges</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>From</th>
+                                <th></th>
+                                <th>To</th>
+                                <th>Type</th>
+                                <th>Condition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for edge in plan.plan.edges %}
+                            <tr>
+                                <td><code>{{ edge.from_node }}</code></td>
+                                <td class="text-center">→</td>
+                                <td><code>{{ edge.to_node }}</code></td>
+                                <td>
+                                    {% if edge.edge_type == 'parallel' %}
+                                    <span class="badge bg-info">Parallel</span>
+                                    {% elif edge.edge_type == 'conditional' %}
+                                    <span class="badge bg-warning">Conditional</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Sequential</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ edge.condition or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-file-code"></i> Full Plan JSON</h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3" style="max-height: 400px; overflow-y: auto;"><code>{{ plan.plan | tojson(indent=2) }}</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-tasks"></i> Actions</h5>
+            </div>
+            <div class="card-body">
+                {% if plan.status == 'pending_approval' %}
+                <div class="d-grid gap-2">
+                    <button class="btn btn-success" onclick="approvePlan()">
+                        <i class="fas fa-check"></i> Approve Plan
+                    </button>
+                    <button class="btn btn-warning" onclick="editPlan()">
+                        <i class="fas fa-edit"></i> Edit Plan
+                    </button>
+                    <button class="btn btn-danger" onclick="rejectPlan()">
+                        <i class="fas fa-times"></i> Reject Plan
+                    </button>
+                </div>
+                {% elif plan.status == 'approved' %}
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" onclick="executePlan()">
+                        <i class="fas fa-play"></i> Execute Plan
+                    </button>
+                    <button class="btn btn-secondary" onclick="viewExecution()">
+                        <i class="fas fa-eye"></i> View Execution History
+                    </button>
+                </div>
+                {% endif %}
+                
+                <hr>
+                
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('lgraph_planner_page') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Planner
+                    </a>
+                    <button class="btn btn-outline-primary" onclick="exportPlan()">
+                        <i class="fas fa-download"></i> Export Plan
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {% if plan.options %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-cog"></i> Plan Options</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li>
+                        <i class="fas fa-{{ 'check-circle text-success' if plan.options.allow_parallel else 'times-circle text-muted' }}"></i>
+                        Parallel Execution
+                    </li>
+                    <li>
+                        <i class="fas fa-{{ 'check-circle text-success' if plan.options.allow_loops else 'times-circle text-muted' }}"></i>
+                        Loops & Iterations
+                    </li>
+                    <li>
+                        <i class="fas fa-{{ 'check-circle text-success' if plan.options.include_hitl else 'times-circle text-muted' }}"></i>
+                        HITL Checkpoints
+                    </li>
+                    <li>
+                        <i class="fas fa-{{ 'check-circle text-success' if plan.options.reuse_existing else 'times-circle text-muted' }}"></i>
+                        Reuse Existing DAGs
+                    </li>
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-chart-line"></i> Execution Flow</h6>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Visual flow diagram:</p>
+                <div class="text-center">
+                    {% for node_id in plan.plan.start_nodes %}
+                    <div class="badge bg-success mb-1">START: {{ node_id }}</div><br>
+                    {% endfor %}
+                    <i class="fas fa-arrow-down text-muted"></i><br>
+                    <div class="badge bg-secondary mb-1">{{ plan.plan.nodes | length }} nodes</div><br>
+                    <i class="fas fa-arrow-down text-muted"></i><br>
+                    {% for node_id in plan.plan.end_nodes %}
+                    <div class="badge bg-danger mb-1">END: {{ node_id }}</div><br>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function approvePlan() {
+    if (confirm('Approve this plan for execution?')) {
+        $.ajax({
+            url: '/api/lgraph/plan/{{ plan.plan_id }}/approve',
+            method: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    alert('Plan approved successfully!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + response.error);
+                }
+            },
+            error: function() {
+                alert('Error approving plan');
+            }
+        });
+    }
+}
+
+function rejectPlan() {
+    const reason = prompt('Enter reason for rejection (optional):');
+    if (reason !== null) {
+        $.ajax({
+            url: '/api/lgraph/plan/{{ plan.plan_id }}/reject',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({reason: reason}),
+            success: function(response) {
+                if (response.success) {
+                    alert('Plan rejected');
+                    window.location.href = '{{ url_for("lgraph_planner_page") }}';
+                } else {
+                    alert('Error: ' + response.error);
+                }
+            },
+            error: function() {
+                alert('Error rejecting plan');
+            }
+        });
+    }
+}
+
+function editPlan() {
+    alert('Edit functionality coming soon!');
+}
+
+function executePlan() {
+    if (confirm('Execute this autonomous plan?')) {
+        $.ajax({
+            url: '/api/lgraph/plan/{{ plan.plan_id }}/execute',
+            method: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    alert('Plan execution started!');
+                    window.location.href = '/execution/' + response.execution_id;
+                } else {
+                    alert('Error: ' + response.error);
+                }
+            },
+            error: function() {
+                alert('Error executing plan');
+            }
+        });
+    }
+}
+
+function viewExecution() {
+    window.location.href = '/lgraph/plan/{{ plan.plan_id }}/executions';
+}
+
+function exportPlan() {
+    const planJson = {{ plan.plan | tojson }};
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(planJson, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "plan_{{ plan.plan_id }}.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+}
+</script>
+{% endblock %}
