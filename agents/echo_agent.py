@@ -5,7 +5,7 @@ Simple agent that echoes back the input
 © 2025-2030 Ashutosh Sinha, ajsinha@gmail.com, https://www.github.com/ajsinha/abhikarta
 """
 
-from agents.agent_registry import BaseAgent
+from agents.base_agent import BaseAgent
 from typing import Dict, Any
 
 

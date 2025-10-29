@@ -43,7 +43,7 @@ Agents that can dynamically call tools during execution
 © 2025-2030 Ashutosh Sinha
 """
 
-from agents.agent_registry import BaseAgent
+from agents.base_agent import BaseAgent
 from tools.tool_registry import ToolRegistry
 from typing import Dict, Any, List, Optional
 import logging
@@ -53,13 +53,13 @@ logger = logging.getLogger(__name__)
 
 class ToolEnabledAgent(BaseAgent):
     """Base class for agents that can use tools"""
-    
-    def __init__(self, agent_id: str, name: str, description: str, 
+
+    def __init__(self, agent_id: str, name: str, description: str,
                  config: Dict[str, Any] = None):
         super().__init__(agent_id, name, description, config)
         self.tool_registry = ToolRegistry()  # Get singleton instance
         self.available_tools = self._get_available_tools()
-        
+
     def _get_available_tools(self) -> List[str]:
         """Get list of tools this agent can use"""
         # Get from config or use all tools
@@ -68,7 +68,7 @@ class ToolEnabledAgent(BaseAgent):
         else:
             # Return all tool names
             return [tool['tool_name'] for tool in self.tool_registry.list_tools()]
-    
+
     def call_tool(self, tool_name: str, **kwargs) -> Dict[str, Any]:
         """
         Call a tool and return its result
@@ -86,21 +86,21 @@ class ToolEnabledAgent(BaseAgent):
                 'success': False,
                 'error': f'Tool {tool_name} not available to this agent'
             }
-        
+
         logger.info(f"Agent {self.agent_id} calling tool: {tool_name}")
         result = self.tool_registry.execute_tool(tool_name, **kwargs)
-        
+
         if result.get('success'):
             logger.info(f"Tool {tool_name} executed successfully")
         else:
             logger.error(f"Tool {tool_name} failed: {result.get('error')}")
-        
+
         return result
-    
+
     def get_tool_info(self, tool_name: str) -> Optional[Dict[str, Any]]:
         """Get information about a tool"""
         return self.tool_registry.get_tool_info(tool_name)
-    
+
     def list_available_tools(self) -> List[Dict[str, Any]]:
         """List all tools available to this agent"""
         all_tools = self.tool_registry.list_tools()
