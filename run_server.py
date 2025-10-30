@@ -34,5 +34,11 @@ if __name__ == '__main__':
     print("  python3 mcp_server/mock_mcp_server.py")
     print("=" * 60)
     print()
-    
-    app.run(host=host, port=port, debug=debug, threaded=True)
+
+    cert_file = props.get('server.cert.file', None)
+    key_file = props.get('server.key.file', None)
+    # Run Flask app
+    if not cert_file and not key_file:
+        app.run(host=host, port=port, debug=debug)
+    else:
+        app.run(host=host, port=port, debug=debug, ssl_context=(cert_file, key_file))
