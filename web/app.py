@@ -11,6 +11,7 @@ import os
 # Import core modules
 from core.properties_configurator import PropertiesConfigurator
 from db.database import initialize_db, get_db
+from db.database_call_handler import get_database_handler
 from core.user_registry import UserRegistry
 from agents.agent_registry import AgentRegistry
 from tools.tool_registry import ToolRegistry
@@ -98,11 +99,12 @@ class AbhikartaApp:
         # Initialize authentication routes first (to get login_required decorator)
         auth_routes = AuthRoutes(self.app, self.user_registry, get_db)
         login_required = auth_routes.login_required
+        admin_required = auth_routes.admin_required
 
         # Initialize all other route classes
         dashboard_routes = DashboardRoutes(
             self.app, self.user_registry, self.orchestrator,
-            self.tool_registry, get_db, login_required
+            self.tool_registry, get_database_handler(), login_required
         )
 
         agent_routes = AgentRoutes(
@@ -119,7 +121,7 @@ class AbhikartaApp:
         )
 
         workflow_routes = WorkflowRoutes(
-            self.app, self.user_registry, self.orchestrator, get_db, login_required
+            self.app, self.user_registry, self.orchestrator, get_database_handler(), login_required
         )
 
         hitl_routes = HITLRoutes(
@@ -141,7 +143,7 @@ class AbhikartaApp:
             self.agent_registry, self.dag_registry, login_required
         )
 
-        monitoring_routes = MonitoringRoutes(self.app, login_required)
+        monitoring_routes = MonitoringRoutes(self.app, login_required, admin_required)
 
         config_routes = ConfigRoutes(
             self.app, self.user_registry, self.agent_registry,

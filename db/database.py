@@ -231,7 +231,6 @@ class Database:
 # Global database instance
 _db_instance: Optional[Database] = None
 
-
 def get_db() -> Database:
     """Get global database instance"""
     global _db_instance

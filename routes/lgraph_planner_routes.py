@@ -72,8 +72,7 @@ class LGraphPlannerRoutes:
                 result = planner.chat(
                     user_id=user_id,
                     message=message,
-                    conversation_history=history,
-                    session_id=session_id
+                    conversation_history=history
                 )
 
                 return jsonify({

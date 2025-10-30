@@ -18,7 +18,12 @@ class AuthRoutes:
         self.user_registry = user_registry
         self.get_db = get_db
         self.register_routes()
-    
+
+    def get_user(self, user_id):
+        """Get user from database - simplified for demo"""
+        # In production, fetch from database
+        return self.user_registry.get_user(user_id)
+
     def login_required(self, f):
         """Authentication decorator"""
         @wraps(f)
@@ -27,7 +32,21 @@ class AuthRoutes:
                 return redirect(url_for('login'))
             return f(*args, **kwargs)
         return decorated_function
-    
+
+    def admin_required(self, f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'user_id' not in session:
+                return redirect(url_for('login'))
+            # Simplified admin check - in production, check user role from database
+            user = self.get_user(session['user_id'])
+            if not user or not user.get('is_admin'):
+                flash('Admin access required', 'danger')
+                return redirect(url_for('dashboard'))
+            return f(*args, **kwargs)
+
+        return decorated_function
+
     def register_routes(self):
         """Register all authentication routes"""
         

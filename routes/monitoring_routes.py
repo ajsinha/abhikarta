@@ -11,9 +11,10 @@ from flask import render_template, jsonify
 class MonitoringRoutes:
     """Monitoring routes handler"""
     
-    def __init__(self, app, login_required):
+    def __init__(self, app, login_required, admin_required):
         self.app = app
         self.login_required = login_required
+        self.admin_required = admin_required
         self.register_routes()
     
     def register_routes(self):

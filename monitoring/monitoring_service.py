@@ -7,14 +7,14 @@ Helper functions for gathering monitoring statistics
 
 from datetime import datetime, timedelta
 from typing import Dict, Any
-from db.database import get_db
+from db.database_call_handler import DatabaseCallHandler, get_database_handler
 
 
 class MonitoringService:
     """Service for gathering monitoring statistics"""
 
-    def __init__(self):
-        self.db = get_db()
+    def __init__(self, db_handler: DatabaseCallHandler = None):
+        self.db_handler = db_handler or get_database_handler()
 
     def get_time_ranges(self):
         """Get time range strings for queries"""
@@ -53,52 +53,24 @@ class MonitoringService:
         times = self.get_time_ranges()
 
         # Count users/sessions by time period
-        today_count = self.db.fetchone(
-            "SELECT COUNT(DISTINCT user_id) as count FROM sessions WHERE created_at >= ?",
-            (times['today'],)
-        )['count'] or 0
-
-        week_count = self.db.fetchone(
-            "SELECT COUNT(DISTINCT user_id) as count FROM sessions WHERE created_at >= ?",
-            (times['week_ago'],)
-        )['count'] or 0
-
-        total_users = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM users"
-        )['count'] or 0
+        today_count = self.db_handler.count_distinct_users_in_sessions(times['today'])
+        week_count = self.db_handler.count_distinct_users_in_sessions(times['week_ago'])
+        total_users = self.db_handler.count_total_users()
 
         # Hourly data
         intervals = self.get_10min_intervals()
         hourly_data = []
         for interval in intervals:
-            count = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM sessions WHERE created_at >= ? AND created_at < ?",
-                (interval['start'], interval['end'])
-            )['count'] or 0
+            count = self.db_handler.count_sessions_in_time_range(
+                interval['start'], interval['end']
+            )
             hourly_data.append({'time': interval['time'], 'count': count})
 
         # Active sessions
-        active_sessions = self.db.fetchall("""
-            SELECT s.*, u.username 
-            FROM sessions s
-            JOIN users u ON s.user_id = u.user_id
-            WHERE s.status = 'active'
-            ORDER BY s.updated_at DESC
-            LIMIT 10
-        """)
+        active_sessions = self.db_handler.get_active_sessions_with_users(limit=10)
 
         # User statistics
-        user_stats = self.db.fetchall("""
-            SELECT 
-                u.username,
-                u.role,
-                u.last_login,
-                (SELECT COUNT(*) FROM sessions WHERE user_id = u.user_id) as session_count,
-                (SELECT COUNT(*) FROM workflows WHERE created_by = u.user_id) as workflow_count
-            FROM users u
-            ORDER BY workflow_count DESC
-            LIMIT 10
-        """)
+        user_stats = self.db_handler.get_user_statistics(limit=10)
 
         return {
             'today': today_count,
@@ -116,32 +88,14 @@ class MonitoringService:
         times = self.get_time_ranges()
 
         # Count tool executions
-        today_count = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'tool' AND started_at >= ?
-        """, (times['today'],))['count'] or 0
-
-        week_count = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'tool' AND started_at >= ?
-        """, (times['week_ago'],))['count'] or 0
-
-        total_count = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'tool'
-        """)['count'] or 0
+        today_count = self.db_handler.count_tool_nodes(times['today'])
+        week_count = self.db_handler.count_tool_nodes(times['week_ago'])
+        total_count = self.db_handler.count_tool_nodes()
 
         # Success rate (last 7 days)
-        week_stats = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as success
-            FROM workflow_nodes
-            WHERE node_type = 'tool' AND started_at >= ?
-        """, (times['week_ago'],))
-
+        week_stats = self.db_handler.get_tool_success_stats(times['week_ago'])
         success_rate = 0
-        if week_stats and week_stats['total'] > 0:
+        if week_stats['total'] > 0:
             success_rate = (week_stats['success'] / week_stats['total']) * 100
 
         # Average execution time (mock for now - would need duration calculation)
@@ -151,10 +105,9 @@ class MonitoringService:
         intervals = self.get_10min_intervals()
         hourly_data = []
         for interval in intervals:
-            count = self.db.fetchone("""
-                SELECT COUNT(*) as count FROM workflow_nodes 
-                WHERE node_type = 'tool' AND started_at >= ? AND started_at < ?
-            """, (interval['start'], interval['end']))['count'] or 0
+            count = self.db_handler.count_tool_nodes_in_time_range(
+                interval['start'], interval['end']
+            )
             hourly_data.append({'time': interval['time'], 'count': count})
 
         # Per-tool statistics
@@ -191,32 +144,14 @@ class MonitoringService:
         times = self.get_time_ranges()
 
         # Count agent executions
-        today_count = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'agent' AND started_at >= ?
-        """, (times['today'],))['count'] or 0
-
-        week_count = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'agent' AND started_at >= ?
-        """, (times['week_ago'],))['count'] or 0
-
-        total_count = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'agent'
-        """)['count'] or 0
+        today_count = self.db_handler.count_agent_nodes(times['today'])
+        week_count = self.db_handler.count_agent_nodes(times['week_ago'])
+        total_count = self.db_handler.count_agent_nodes()
 
         # Success rate (last 7 days)
-        week_stats = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as success
-            FROM workflow_nodes
-            WHERE node_type = 'agent' AND started_at >= ?
-        """, (times['week_ago'],))
-
+        week_stats = self.db_handler.get_agent_success_stats(times['week_ago'])
         success_rate = 0
-        if week_stats and week_stats['total'] > 0:
+        if week_stats['total'] > 0:
             success_rate = (week_stats['success'] / week_stats['total']) * 100
 
         avg_time = "1.8s"
@@ -225,10 +160,9 @@ class MonitoringService:
         intervals = self.get_10min_intervals()
         hourly_data = []
         for interval in intervals:
-            count = self.db.fetchone("""
-                SELECT COUNT(*) as count FROM workflow_nodes 
-                WHERE node_type = 'agent' AND started_at >= ? AND started_at < ?
-            """, (interval['start'], interval['end']))['count'] or 0
+            count = self.db_handler.count_agent_nodes_in_time_range(
+                interval['start'], interval['end']
+            )
             hourly_data.append({'time': interval['time'], 'count': count})
 
         # Per-agent statistics
@@ -238,21 +172,14 @@ class MonitoringService:
             agent_registry = AgentRegistry()
             for agent in agent_registry.list_agents():
                 # Count executions for this agent
-                exec_stats = self.db.fetchone("""
-                    SELECT 
-                        COUNT(*) as total,
-                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as success,
-                        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-                    FROM workflow_nodes
-                    WHERE node_type = 'agent' AND agent_id = ?
-                """, (agent['agent_id'],))
+                exec_stats = self.db_handler.get_agent_execution_stats(agent['agent_id'])
 
                 agent_stats.append({
                     'agent_id': agent['agent_id'],
                     'enabled': agent.get('enabled', True),
-                    'total': exec_stats['total'] or 0,
-                    'success': exec_stats['success'] or 0,
-                    'failed': exec_stats['failed'] or 0,
+                    'total': exec_stats['total'],
+                    'success': exec_stats['success'],
+                    'failed': exec_stats['failed'],
                     'avg_duration': '0s'
                 })
         except:
@@ -275,51 +202,29 @@ class MonitoringService:
         times = self.get_time_ranges()
 
         # Count workflows
-        today_count = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows WHERE created_at >= ?",
-            (times['today'],)
-        )['count'] or 0
-
-        week_count = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows WHERE created_at >= ?",
-            (times['week_ago'],)
-        )['count'] or 0
-
-        total_count = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows"
-        )['count'] or 0
+        today_count = self.db_handler.count_workflows_by_time(times['today'])
+        week_count = self.db_handler.count_workflows_by_time(times['week_ago'])
+        total_count = self.db_handler.get_workflow_count()
 
         # Success rate
-        week_stats = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
-            FROM workflows
-            WHERE created_at >= ?
-        """, (times['week_ago'],))
-
+        week_stats = self.db_handler.get_workflow_success_stats(times['week_ago'])
         success_rate = 0
-        if week_stats and week_stats['total'] > 0:
+        if week_stats['total'] > 0:
             success_rate = (week_stats['completed'] / week_stats['total']) * 100
 
         # Running count
-        running_count = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows WHERE status = 'running'"
-        )['count'] or 0
+        running_count = self.db_handler.get_workflow_count('running')
 
         # Hourly data
         intervals = self.get_10min_intervals()
         hourly_data = []
         for interval in intervals:
-            started = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM workflows WHERE started_at >= ? AND started_at < ?",
-                (interval['start'], interval['end'])
-            )['count'] or 0
-
-            completed = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM workflows WHERE completed_at >= ? AND completed_at < ?",
-                (interval['start'], interval['end'])
-            )['count'] or 0
+            started = self.db_handler.count_workflows_started_in_time_range(
+                interval['start'], interval['end']
+            )
+            completed = self.db_handler.count_workflows_completed_in_time_range(
+                interval['start'], interval['end']
+            )
 
             hourly_data.append({
                 'time': interval['time'],
@@ -328,18 +233,7 @@ class MonitoringService:
             })
 
         # Per-DAG statistics
-        dag_stats = self.db.fetchall("""
-            SELECT 
-                dag_id,
-                name,
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-                SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running
-            FROM workflows
-            GROUP BY dag_id, name
-            ORDER BY total DESC
-        """)
+        dag_stats = self.db_handler.get_dag_statistics()
 
         for dag in dag_stats:
             dag['avg_duration'] = '0s'  # Would calculate from started_at/completed_at
@@ -362,8 +256,8 @@ class MonitoringService:
         times = self.get_time_ranges()
 
         # Check if tables exist first
-        plans_exist = self._table_exists('plans')
-        conversations_exist = self._table_exists('planner_conversations')
+        plans_exist = self.db_handler.table_exists('plans')
+        conversations_exist = self.db_handler.table_exists('planner_conversations')
 
         if not plans_exist:
             # Return empty stats if table doesn't exist
@@ -387,61 +281,37 @@ class MonitoringService:
             }
 
         # Count plans
-        today_count = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM plans WHERE created_at >= ?",
-            (times['today'],)
-        )['count'] or 0
-
-        week_count = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM plans WHERE created_at >= ?",
-            (times['week_ago'],)
-        )['count'] or 0
-
-        total_count = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM plans"
-        )['count'] or 0
+        today_count = self.db_handler.count_plans(times['today'])
+        week_count = self.db_handler.count_plans(times['week_ago'])
+        total_count = self.db_handler.count_plans()
 
         # Approval rate
-        week_stats = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved
-            FROM plans
-            WHERE created_at >= ?
-        """, (times['week_ago'],))
-
+        week_stats = self.db_handler.get_plan_approval_stats(times['week_ago'])
         approval_rate = 0
-        if week_stats and week_stats['total'] > 0:
+        if week_stats['total'] > 0:
             approval_rate = (week_stats['approved'] / week_stats['total']) * 100
 
         # Conversations today
         conversations_today = 0
         if conversations_exist:
-            conversations_today = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM planner_conversations WHERE created_at >= ?",
-                (times['today'],)
-            )['count'] or 0
+            conversations_today = self.db_handler.count_planner_conversations(times['today'])
 
         # Pending approval
-        pending_approval = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM plans WHERE status = 'pending_approval'"
-        )['count'] or 0
+        pending_approval = self.db_handler.count_plans_by_status('pending_approval')
 
         # Hourly data
         intervals = self.get_10min_intervals()
         hourly_data = []
         for interval in intervals:
-            plans = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM plans WHERE created_at >= ? AND created_at < ?",
-                (interval['start'], interval['end'])
-            )['count'] or 0
+            plans = self.db_handler.count_plans_in_time_range(
+                interval['start'], interval['end']
+            )
 
             conversations = 0
             if conversations_exist:
-                conversations = self.db.fetchone(
-                    "SELECT COUNT(*) as count FROM planner_conversations WHERE created_at >= ? AND created_at < ?",
-                    (interval['start'], interval['end'])
-                )['count'] or 0
+                conversations = self.db_handler.count_planner_conversations_in_time_range(
+                    interval['start'], interval['end']
+                )
 
             hourly_data.append({
                 'time': interval['time'],
@@ -450,34 +320,13 @@ class MonitoringService:
             })
 
         # Status distribution
-        status_distribution = {
-            'pending_approval':
-                self.db.fetchone("SELECT COUNT(*) as count FROM plans WHERE status = 'pending_approval'")['count'] or 0,
-            'approved': self.db.fetchone("SELECT COUNT(*) as count FROM plans WHERE status = 'approved'")['count'] or 0,
-            'rejected': self.db.fetchone("SELECT COUNT(*) as count FROM plans WHERE status = 'rejected'")['count'] or 0,
-            'executed': self.db.fetchone("SELECT COUNT(*) as count FROM plans WHERE status = 'executed'")['count'] or 0
-        }
+        status_distribution = self.db_handler.get_plan_status_distribution()
 
         # Top users
-        top_users = self.db.fetchall("""
-            SELECT 
-                u.username,
-                (SELECT COUNT(*) FROM plans WHERE user_id = u.user_id) as plan_count,
-                0 as conversation_count
-            FROM users u
-            WHERE (SELECT COUNT(*) FROM plans WHERE user_id = u.user_id) > 0
-            ORDER BY plan_count DESC
-            LIMIT 5
-        """)
+        top_users = self.db_handler.get_top_plan_users(limit=5)
 
         # Recent plans
-        recent_plans = self.db.fetchall("""
-            SELECT p.*, u.username
-            FROM plans p
-            JOIN users u ON p.user_id = u.user_id
-            ORDER BY p.created_at DESC
-            LIMIT 10
-        """)
+        recent_plans = self.db_handler.get_recent_plans_with_users(limit=10)
 
         return {
             'today': today_count,
@@ -499,40 +348,20 @@ class MonitoringService:
         times = self.get_time_ranges()
 
         # Active users (last 24 hours)
-        active_users = self.db.fetchone(
-            "SELECT COUNT(DISTINCT user_id) as count FROM sessions WHERE updated_at >= ?",
-            ((datetime.now() - timedelta(hours=24)).isoformat(),)
-        )['count'] or 0
+        time_24h_ago = (datetime.now() - timedelta(hours=24)).isoformat()
+        active_users = self.db_handler.count_active_users_in_last_24h(time_24h_ago)
 
         # Workflows today
-        workflows_today = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows WHERE created_at >= ?",
-            (times['today'],)
-        )['count'] or 0
+        workflows_today = self.db_handler.count_workflows_by_time(times['today'])
 
         # Agent executions today
-        agent_executions_today = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'agent' AND started_at >= ?
-        """, (times['today'],))['count'] or 0
+        agent_executions_today = self.db_handler.count_agent_nodes(times['today'])
 
         # Pending HITL
-        pending_hitl = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM hitl_requests WHERE status = 'pending'"
-        )['count'] or 0
+        pending_hitl = self.db_handler.count_pending_hitl_requests()
 
         # Recent activity
-        recent_activity = self.db.fetchall("""
-            SELECT 
-                'workflow' as type,
-                'primary' as type_color,
-                'Workflow started: ' || COALESCE(name, 'Unnamed') as event,
-                created_by as user,
-                created_at as time
-            FROM workflows
-            ORDER BY created_at DESC
-            LIMIT 10
-        """)
+        recent_activity = self.db_handler.get_recent_activity(limit=10)
 
         return {
             'active_users': active_users,
@@ -541,14 +370,3 @@ class MonitoringService:
             'pending_hitl': pending_hitl,
             'recent_activity': recent_activity
         }
-
-    def _table_exists(self, table_name: str) -> bool:
-        """Check if a table exists in the database"""
-        try:
-            result = self.db.fetchone(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                (table_name,)
-            )
-            return result is not None
-        except:
-            return False

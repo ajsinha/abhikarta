@@ -309,11 +309,17 @@ function approvePlan() {
                     alert('Plan approved successfully!');
                     location.reload();
                 } else {
-                    alert('Error: ' + response.error);
+                    alert('Error: ' + (response.error || 'Unknown error occurred'));
                 }
             },
-            error: function() {
-                alert('Error approving plan');
+            error: function(xhr) {
+                let errorMsg = 'Error approving plan';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg += ': ' + xhr.responseJSON.error;
+                } else if (xhr.statusText) {
+                    errorMsg += ': ' + xhr.statusText;
+                }
+                alert(errorMsg);
             }
         });
     }
@@ -332,11 +338,17 @@ function rejectPlan() {
                     alert('Plan rejected');
                     window.location.href = '{{ url_for("lgraph_planner_page") }}';
                 } else {
-                    alert('Error: ' + response.error);
+                    alert('Error: ' + (response.error || 'Unknown error occurred'));
                 }
             },
-            error: function() {
-                alert('Error rejecting plan');
+            error: function(xhr) {
+                let errorMsg = 'Error rejecting plan';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg += ': ' + xhr.responseJSON.error;
+                } else if (xhr.statusText) {
+                    errorMsg += ': ' + xhr.statusText;
+                }
+                alert(errorMsg);
             }
         });
     }
@@ -348,26 +360,49 @@ function editPlan() {
 
 function executePlan() {
     if (confirm('Execute this autonomous plan?')) {
+        // Disable button and show loading state
+        const executeBtn = event.target;
+        const originalHTML = executeBtn.innerHTML;
+        executeBtn.disabled = true;
+        executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting Execution...';
+
         $.ajax({
             url: '/api/lgraph/plan/{{ plan.plan_id }}/execute',
             method: 'POST',
             success: function(response) {
                 if (response.success) {
-                    alert('Plan execution started!');
-                    window.location.href = '/execution/' + response.execution_id;
+                    alert('Plan execution started successfully!');
+                    // Redirect to execution page if available, otherwise back to planner
+                    if (response.execution_id) {
+                        window.location.href = '{{ url_for("lgraph_planner_page") }}';
+                    } else {
+                        window.location.href = '{{ url_for("lgraph_planner_page") }}';
+                    }
                 } else {
-                    alert('Error: ' + response.error);
+                    alert('Error: ' + (response.error || 'Unknown error occurred'));
+                    executeBtn.disabled = false;
+                    executeBtn.innerHTML = originalHTML;
                 }
             },
-            error: function() {
-                alert('Error executing plan');
+            error: function(xhr) {
+                let errorMsg = 'Error executing plan';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg += ': ' + xhr.responseJSON.error;
+                } else if (xhr.statusText) {
+                    errorMsg += ': ' + xhr.statusText;
+                }
+                alert(errorMsg);
+                executeBtn.disabled = false;
+                executeBtn.innerHTML = originalHTML;
             }
         });
     }
 }
 
 function viewExecution() {
-    window.location.href = '/lgraph/plan/{{ plan.plan_id }}/executions';
+    // Check if execution history route exists, otherwise show alert
+    alert('Execution history view is under development. Please check the planner page for execution status.');
+    // window.location.href = '/lgraph/plan/{{ plan.plan_id }}/executions';
 }
 
 function exportPlan() {
