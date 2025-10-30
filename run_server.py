@@ -12,21 +12,24 @@ import os
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Import and run the Flask app
-from web.app import app, props
+# Import the AbhikartaApp class
+from web.app import AbhikartaApp
 
-if __name__ == '__main__':
+
+def print_banner(abhikarta_app):
+    """Print startup banner with configuration details"""
+    props = abhikarta_app.get_config()
+
+    host = props.get('server.host', '0.0.0.0')
+    port = props.get_int('server.port', 5001)
+    debug = props.get_bool('server.debug', True)
+
     print("=" * 60)
     print("Abhikarta - Multi-Agent Orchestration System")
     print("© 2025-2030 Ashutosh Sinha")
     print("ajsinha@gmail.com")
     print("https://www.github.com/ajsinha/abhikarta")
     print("=" * 60)
-    
-    host = props.get('server.host', '0.0.0.0')
-    port = props.get_int('server.port', 5001)
-    debug = props.get_bool('server.debug', True)
-    
     print(f"\nStarting server on http://{host}:{port}")
     print(f"Debug mode: {debug}")
     print("\nDefault login: admin / admin")
@@ -35,10 +38,52 @@ if __name__ == '__main__':
     print("=" * 60)
     print()
 
-    cert_file = props.get('server.cert.file', None)
-    key_file = props.get('server.key.file', None)
-    # Run Flask app
-    if not cert_file and not key_file:
-        app.run(host=host, port=port, debug=debug)
-    else:
-        app.run(host=host, port=port, debug=debug, ssl_context=(cert_file, key_file))
+
+def main():
+    """Main entry point"""
+    try:
+        # Initialize the Abhikarta application
+        abhikarta_app = AbhikartaApp(config_file='application.properties')
+
+        # Print startup banner
+        print_banner(abhikarta_app)
+
+        # Get configuration
+        props = abhikarta_app.get_config()
+
+        # Get server configuration
+        host = props.get('server.host', '0.0.0.0')
+        port = props.get_int('server.port', 5001)
+        debug = props.get_bool('server.debug', True)
+
+        # Check for SSL configuration
+        cert_file = props.get('server.cert.file', None)
+        key_file = props.get('server.key.file', None)
+
+        # Prepare SSL context if certificates are configured
+        ssl_context = None
+        if cert_file and key_file:
+            ssl_context = (cert_file, key_file)
+            print(f"SSL enabled with cert: {cert_file}")
+            print()
+
+        # Run the application
+        abhikarta_app.run(
+            host=host,
+            port=port,
+            debug=debug,
+            ssl_context=ssl_context
+        )
+
+    except KeyboardInterrupt:
+        print("\n\nServer stopped by user")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n\nError starting server: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
