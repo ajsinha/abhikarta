@@ -90,3 +90,30 @@ class AuthRoutes:
             session.clear()
             flash('Logged out successfully', 'info')
             return redirect(url_for('login'))
+
+
+        @self.app.route('/admin/diagnose')
+        def diagnose():
+            from db.database_call_handler import get_database_handler
+
+            db = get_database_handler()
+
+            # Check tables
+            print("\n=== TABLES ===")
+            for table in ['plans', 'lgraph_plans', 'workflow_executions']:
+                exists = db.table_exists(table)
+                print(f"{table}: {'EXISTS' if exists else 'MISSING'}")
+
+                if exists:
+                    try:
+                        count = db.execute_query(f"SELECT COUNT(*) as count FROM {table}")[0]['count']
+                        print(f"  → {count} records")
+
+                        # Show recent
+                        recent = db.execute_query(f"SELECT * FROM {table} ORDER BY created_at DESC LIMIT 1")
+                        if recent:
+                            print(f"  → Latest: {recent[0]}")
+                    except Exception as e:
+                        print(f"  → Error: {e}")
+
+            return "Check console output"

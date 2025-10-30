@@ -129,7 +129,7 @@
 <!-- Recent Plans -->
 <div class="card">
     <div class="card-header">
-        <h5 class="mb-0"><i class="fas fa-list"></i> Recent Plans</h5>
+        <h5 class="mb-0"><i class="fas fa-list"></i> Recent Plans (DAG & LangGraph)</h5>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -137,6 +137,7 @@
                 <thead>
                     <tr>
                         <th>Plan ID</th>
+                        <th>Type</th>
                         <th>User</th>
                         <th>Request</th>
                         <th>Status</th>
@@ -145,7 +146,7 @@
                 </thead>
                 <tbody id="recentPlansTable">
                     <tr>
-                        <td colspan="5" class="text-center text-muted">Loading...</td>
+                        <td colspan="6" class="text-center text-muted">Loading...</td>
                     </tr>
                 </tbody>
             </table>
@@ -164,20 +165,20 @@ function loadPlannerMonitoring() {
         $('#countToday').text(data.today || 0);
         $('#count7Days').text(data.last_7_days || 0);
         $('#countTotal').text(data.total || 0);
-        
+
         // Update approval rate
         const approvalRate = data.approval_rate || 0;
         $('#approvalRate').text(approvalRate.toFixed(1) + '%');
         $('#approvalRateBar').css('width', approvalRate + '%');
-        
+
         // Update conversations
         $('#conversationsToday').text(data.conversations_today || 0);
         $('#pendingApproval').text(data.pending_approval || 0);
-        
+
         // Update charts
         updateActivityChart(data.hourly_data || []);
         updateStatusChart(data.status_distribution || {});
-        
+
         // Update top users table
         if (data.top_users && data.top_users.length > 0) {
             let html = '';
@@ -192,7 +193,7 @@ function loadPlannerMonitoring() {
         } else {
             $('#topUsersTable').html('<tr><td colspan="3" class="text-center text-muted">No data</td></tr>');
         }
-        
+
         // Update recent plans table
         if (data.recent_plans && data.recent_plans.length > 0) {
             let html = '';
@@ -203,8 +204,14 @@ function loadPlannerMonitoring() {
                     'rejected': 'danger',
                     'executed': 'info'
                 };
+                const planType = plan.plan_type || 'DAG';
+                const planTypeBadge = planType === 'LangGraph' ?
+                    '<span class="badge bg-primary">LangGraph</span>' :
+                    '<span class="badge bg-secondary">DAG</span>';
+
                 html += `<tr>
                     <td><code>${plan.plan_id.substring(0, 12)}...</code></td>
+                    <td>${planTypeBadge}</td>
                     <td>${plan.username}</td>
                     <td>${plan.request.substring(0, 50)}...</td>
                     <td><span class="badge bg-${statusColors[plan.status] || 'secondary'}">${plan.status}</span></td>
@@ -213,7 +220,7 @@ function loadPlannerMonitoring() {
             });
             $('#recentPlansTable').html(html);
         } else {
-            $('#recentPlansTable').html('<tr><td colspan="5" class="text-center text-muted">No plans</td></tr>');
+            $('#recentPlansTable').html('<tr><td colspan="6" class="text-center text-muted">No plans</td></tr>');
         }
     });
 }

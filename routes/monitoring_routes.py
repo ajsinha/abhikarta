@@ -45,7 +45,8 @@ class MonitoringRoutes:
         def monitoring_agents():
             """Agents monitoring page"""
             return render_template('monitoring_agents.html')
-        
+
+
         @self.app.route('/monitoring/dags')
         @self.login_required
         def monitoring_dags():

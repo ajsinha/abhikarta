@@ -1171,6 +1171,198 @@ class DatabaseCallHandler:
             return False
 
 
+# ========== ADD THESE METHODS TO DatabaseCallHandler CLASS ==========
+
+def count_lgraph_plans(self, since_time=None):
+    """Count LangGraph autonomous plans, optionally since a time"""
+    if since_time:
+        return self.count_where('lgraph_plans', 'created_at >= ?', (since_time,))
+    return self.count_all('lgraph_plans')
+
+
+def count_lgraph_plans_by_status(self, status):
+    """Count LangGraph plans by status"""
+    return self.count_where('lgraph_plans', 'status = ?', (status,))
+
+
+def count_lgraph_plans_in_time_range(self, start_time, end_time):
+    """Count LangGraph plans created within a time range"""
+    return self.count_where(
+        'lgraph_plans',
+        'created_at >= ? AND created_at < ?',
+        (start_time, end_time)
+    )
+
+
+def get_lgraph_plan_approval_stats(self, since_time):
+    """Get LangGraph plan approval statistics since a time"""
+    query = """
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+            SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+        FROM lgraph_plans
+        WHERE created_at >= ?
+    """
+    result = self.execute_query(query, (since_time,))
+    if result and len(result) > 0:
+        row = result[0]
+        return {
+            'total': row.get('total', 0) or 0,
+            'approved': row.get('approved', 0) or 0,
+            'rejected': row.get('rejected', 0) or 0
+        }
+    return {'total': 0, 'approved': 0, 'rejected': 0}
+
+
+def count_lgraph_conversations(self, since_time=None):
+    """Count LangGraph planner conversations"""
+    if since_time:
+        return self.count_where('lgraph_conversations', 'created_at >= ?', (since_time,))
+    return self.count_all('lgraph_conversations')
+
+
+def count_lgraph_conversations_in_time_range(self, start_time, end_time):
+    """Count LangGraph conversations within a time range"""
+    return self.count_where(
+        'lgraph_conversations',
+        'created_at >= ? AND created_at < ?',
+        (start_time, end_time)
+    )
+
+
+def get_lgraph_plan_status_distribution(self):
+    """Get distribution of LangGraph plans by status"""
+    query = """
+        SELECT status, COUNT(*) as count
+        FROM lgraph_plans
+        GROUP BY status
+    """
+    results = self.execute_query(query)
+    distribution = {
+        'pending_approval': 0,
+        'approved': 0,
+        'rejected': 0,
+        'executed': 0
+    }
+
+    if results:
+        for row in results:
+            status = row.get('status')
+            count = row.get('count', 0)
+            if status in distribution:
+                distribution[status] = count
+
+    return distribution
+
+
+def get_recent_lgraph_plans_with_users(self, limit=10):
+    """Get recent LangGraph plans with user information"""
+    query = """
+        SELECT 
+            p.plan_id,
+            p.user_id,
+            p.user_request as request,
+            p.status,
+            p.created_at,
+            u.username
+        FROM lgraph_plans p
+        LEFT JOIN users u ON p.user_id = u.user_id
+        ORDER BY p.created_at DESC
+        LIMIT ?
+    """
+    results = self.execute_query(query, (limit,))
+    return results or []
+
+
+def get_top_plan_users_combined(self, limit=5):
+    """Get top users by plan count (combines regular and LangGraph plans)"""
+    query = """
+        SELECT 
+            u.user_id,
+            u.username,
+            (
+                SELECT COUNT(*) FROM plans WHERE user_id = u.user_id
+            ) + (
+                SELECT COUNT(*) FROM lgraph_plans WHERE user_id = u.user_id
+            ) as plan_count,
+            (
+                SELECT COUNT(*) FROM planner_conversations WHERE user_id = u.user_id
+            ) + (
+                SELECT COUNT(*) FROM lgraph_conversations WHERE user_id = u.user_id
+            ) as conversation_count
+        FROM users u
+        WHERE (
+            (SELECT COUNT(*) FROM plans WHERE user_id = u.user_id) + 
+            (SELECT COUNT(*) FROM lgraph_plans WHERE user_id = u.user_id)
+        ) > 0
+        ORDER BY plan_count DESC
+        LIMIT ?
+    """
+    results = self.execute_query(query, (limit,))
+    return results or []
+
+
+# ========== ALSO ADD THESE HELPER METHODS ==========
+
+def count_where(self, table_name, where_clause, params):
+    """Generic count with where clause"""
+    query = f"SELECT COUNT(*) as count FROM {table_name} WHERE {where_clause}"
+    result = self.execute_query(query, params)
+    if result and len(result) > 0:
+        return result[0].get('count', 0) or 0
+    return 0
+
+
+def count_all(self, table_name):
+    """Generic count all rows in a table"""
+    query = f"SELECT COUNT(*) as count FROM {table_name}"
+    result = self.execute_query(query)
+    if result and len(result) > 0:
+        return result[0].get('count', 0) or 0
+    return 0
+
+
+# ========== FALLBACK METHODS (if tables don't exist) ==========
+# Add error handling to each method to return 0/empty if table doesn't exist
+
+def count_lgraph_plans(self, since_time=None):
+    """Count LangGraph autonomous plans, optionally since a time"""
+    try:
+        if not self.table_exists('lgraph_plans'):
+            return 0
+        if since_time:
+            return self.count_where('lgraph_plans', 'created_at >= ?', (since_time,))
+        return self.count_all('lgraph_plans')
+    except Exception as e:
+        print(f"Error counting lgraph plans: {e}")
+        return 0
+
+
+# ========== NOTES ==========
+"""
+IMPORTANT: 
+1. All LangGraph plan queries assume a 'lgraph_plans' table exists
+2. If your LangGraph planner uses a different table name, update accordingly
+3. The table should have these columns:
+   - plan_id (TEXT/VARCHAR)
+   - user_id (TEXT/VARCHAR)
+   - user_request (TEXT)
+   - status (TEXT) - values: 'pending_approval', 'approved', 'rejected', 'executed'
+   - created_at (TEXT/DATETIME)
+   - plan (JSON/TEXT) - the actual plan definition
+
+4. LangGraph conversations table should have:
+   - conversation_id (TEXT/VARCHAR)
+   - user_id (TEXT/VARCHAR)
+   - message (TEXT)
+   - response (TEXT)
+   - created_at (TEXT/DATETIME)
+
+5. Add try-except blocks around all methods to handle missing tables gracefully
+6. Test each method individually before deploying
+"""
+
 # Global database instance
 _handler_instance: Optional[DatabaseCallHandler] = None
 
