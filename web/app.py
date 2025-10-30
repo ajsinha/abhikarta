@@ -143,7 +143,7 @@ class AbhikartaApp:
             self.agent_registry, self.dag_registry, login_required
         )
 
-        monitoring_routes = MonitoringRoutes(self.app, login_required, admin_required)
+        monitoring_routes = MonitoringRoutes(self.app, self.user_registry, login_required, admin_required)
 
         config_routes = ConfigRoutes(
             self.app, self.user_registry, self.agent_registry,
