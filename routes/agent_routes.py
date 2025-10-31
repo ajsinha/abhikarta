@@ -154,10 +154,18 @@ class AgentRoutes:
             action = data.get('action')  # 'enable' or 'disable'
 
             if action == 'enable':
-                if self.agent_registry.enable_agent(agent_id):
+                result = self.agent_registry.enable_agent(agent_id)
+                if result:
                     return jsonify({'success': True, 'message': f'Agent {agent_id} enabled'})
+                else:
+                    return jsonify({'success': False, 'error': f'Failed to enable agent {agent_id}'}), 400
             elif action == 'disable':
-                if self.agent_registry.disable_agent(agent_id):
+                result = self.agent_registry.disable_agent(agent_id)
+                if result:
                     return jsonify({'success': True, 'message': f'Agent {agent_id} disabled'})
+                else:
+                    return jsonify({'success': False, 'error': f'Failed to disable agent {agent_id}'}), 400
+            else:
+                return jsonify({'success': False, 'error': 'Invalid action. Must be "enable" or "disable"'}), 400
 
             return jsonify({'success': False, 'error': 'Failed to toggle agent'}), 400

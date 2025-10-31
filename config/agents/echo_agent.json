@@ -4,5 +4,5 @@
   "description": "Simple echo agent that returns the input",
   "module": "agents.echo_agent.EchoAgent",
   "config": {},
-  "enabled": false
+  "enabled": true
 }

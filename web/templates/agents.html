@@ -78,7 +78,16 @@
     </div>
 </div>
 
+<!-- Load jQuery before using it -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
+// Debug: Log agent count on page load
+$(document).ready(function() {
+    const agentCount = $('tbody tr').length;
+    console.log('Agents page loaded. Number of agents displayed:', agentCount);
+    console.log('Agent data from server:', {{ agents | tojson }});
+});
+
 function toggleAgent(agentId, action) {
     if (!confirm('Are you sure you want to ' + action + ' this agent?')) {
         return;
@@ -94,13 +103,24 @@ function toggleAgent(agentId, action) {
         }),
         success: function(response) {
             if (response.success) {
+                alert('Success: ' + response.message);
                 location.reload();
             } else {
                 alert('Error: ' + (response.error || 'Failed to ' + action + ' agent'));
             }
         },
-        error: function() {
-            alert('Error ' + action + 'ing agent');
+        error: function(xhr, status, error) {
+            console.error('Toggle agent error:', xhr.responseText);
+            let errorMsg = 'Error ' + action + 'ing agent';
+            try {
+                const response = JSON.parse(xhr.responseText);
+                if (response.error) {
+                    errorMsg = response.error;
+                }
+            } catch (e) {
+                console.error('Could not parse error response:', e);
+            }
+            alert(errorMsg);
         }
     });
 }

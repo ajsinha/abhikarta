@@ -793,32 +793,7 @@ class DatabaseCallHandler:
             LIMIT ?
         """, (limit,))
 
-    def get_agent_execution_stats(self, agent_id: str) -> Dict[str, int]:
-        """
-        Get execution statistics for a specific agent
 
-        Args:
-            agent_id: Agent identifier
-
-        Returns:
-            Dictionary with total, success, and failed counts
-        """
-        result = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as success,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM workflow_nodes
-            WHERE node_type = 'agent' AND agent_id = ?
-        """, (agent_id,))
-
-        if result:
-            return {
-                'total': result['total'] or 0,
-                'success': result['success'] or 0,
-                'failed': result['failed'] or 0
-            }
-        return {'total': 0, 'success': 0, 'failed': 0}
 
     # Workflow Monitoring
     def count_workflows_by_time(self, start_time: str) -> int:
@@ -1364,6 +1339,93 @@ class DatabaseCallHandler:
             return result is not None
         except:
             return False
+
+
+    # ==================== Agent Operations ====================
+
+    def get_all_agents(self, order_by: str = 'created_at DESC') -> List[Dict[str, Any]]:
+        """Get all agents"""
+        query = f"SELECT * FROM agents ORDER BY {order_by}"
+        return self.db.fetchall(query)
+
+
+    def get_agent_by_id(self, agent_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific agent by ID"""
+        return self.db.fetchone(
+            "SELECT * FROM agents WHERE agent_id = ?",
+            (agent_id,)
+        )
+
+
+    def create_agent(self, agent_data: Dict[str, Any]) -> int:
+        """Create a new agent"""
+        return self.db.insert('agents', agent_data)
+
+
+    def update_agent(self, agent_id: str, update_data: Dict[str, Any]) -> int:
+        """Update agent data"""
+        return self.db.update(
+            'agents',
+            update_data,
+            'agent_id = ?',
+            (agent_id,)
+        )
+
+
+    def delete_agent(self, agent_id: str) -> int:
+        """Delete an agent"""
+        return self.db.delete('agents', 'agent_id = ?', (agent_id,))
+
+
+    def enable_agent(self, agent_id: str) -> bool:
+        """Enable an agent"""
+        rows = self.update_agent(agent_id, {'enabled': True})
+        return rows > 0
+
+
+    def disable_agent(self, agent_id: str) -> bool:
+        """Disable an agent"""
+        rows = self.update_agent(agent_id, {'enabled': False})
+        return rows > 0
+
+
+    # ==================== Agent Statistics ====================
+
+    def count_agents(self, enabled_only: bool = False) -> int:
+        """Get count of agents"""
+        if enabled_only:
+            result = self.db.fetchone(
+                "SELECT COUNT(*) as count FROM agents WHERE enabled = 1"
+            )
+        else:
+            result = self.db.fetchone("SELECT COUNT(*) as count FROM agents")
+        return result['count'] if result else 0
+
+
+    def get_agent_execution_stats(self, agent_id: str, since_time=None):
+        """Get execution statistics for an agent"""
+        if since_time:
+            results = self.db.fetchall("""
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    AVG(duration) as avg_duration
+                FROM agent_executions
+                WHERE agent_id = ? AND created_at >= ?
+            """, (agent_id, since_time))
+        else:
+            results = self.db.fetchall("""
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    AVG(duration) as avg_duration
+                FROM agent_executions
+                WHERE agent_id = ?
+            """, (agent_id,))
+
+        return results[0] if results else {'total': 0, 'success': 0, 'failed': 0, 'avg_duration': 0}
 
 
 # Global database instance
