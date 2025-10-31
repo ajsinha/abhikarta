@@ -1,221 +1,240 @@
 #!/usr/bin/env python3
 """
-Diagnostic Script - Check why monitoring_users shows no data
-Run this from your project root directory
+Advanced Diagnostic - Sessions exist but monitoring shows empty
+Run this to find out exactly what's wrong
 """
 
 import sys
-import json
 from datetime import datetime, timedelta
+import json
 
 print("=" * 70)
-print("MONITORING USERS DIAGNOSTIC TOOL")
+print("ADVANCED DIAGNOSTIC - Sessions Exist But Cards Empty")
 print("=" * 70)
 
-# Step 1: Import the database handler
-print("\n1. Testing imports...")
+# Import database handler
+print("\n1. Importing database handler...")
 try:
     from db.database_call_handler import get_database_handler
 
-    print("   ✓ DatabaseCallHandler imported")
-except Exception as e:
-    print(f"   ✗ Failed to import: {e}")
-    sys.exit(1)
-
-# Step 2: Get database instance
-print("\n2. Getting database instance...")
-try:
     db_handler = get_database_handler()
-    print("   ✓ Database handler created")
+    print("   ✓ Database handler loaded")
 except Exception as e:
-    print(f"   ✗ Failed to create handler: {e}")
+    print(f"   ✗ Failed: {e}")
     sys.exit(1)
 
-# Step 3: Check if tables exist
-print("\n3. Checking if tables exist...")
-tables_to_check = ['users', 'sessions', 'workflows', 'workflow_nodes']
-table_status = {}
-for table in tables_to_check:
-    try:
-        exists = db_handler.table_exists(table)
-        table_status[table] = exists
-        status = "✓ EXISTS" if exists else "✗ MISSING"
-        print(f"   {status}: {table}")
-    except Exception as e:
-        print(f"   ✗ ERROR checking {table}: {e}")
-        table_status[table] = False
-
-# Step 4: Check users table
-print("\n4. Checking users table...")
-if table_status.get('users'):
-    try:
-        total_users = db_handler.count_total_users()
-        print(f"   Total users in database: {total_users}")
-
-        if total_users > 0:
-            # Try to get some users
-            users = db_handler.db.fetchall("SELECT user_id, username, role FROM users LIMIT 5")
-            print(f"   Sample users:")
-            for user in users:
-                print(
-                    f"     - {user.get('username', 'N/A')} (ID: {user.get('user_id', 'N/A')}, Role: {user.get('role', 'N/A')})")
-        else:
-            print("   ⚠ No users found in database!")
-    except Exception as e:
-        print(f"   ✗ Error reading users: {e}")
-else:
-    print("   ✗ Users table doesn't exist - can't check")
-
-# Step 5: Check sessions table
-print("\n5. Checking sessions table...")
-if table_status.get('sessions'):
-    try:
-        # Count total sessions
-        total_sessions = db_handler.db.fetchone("SELECT COUNT(*) as count FROM sessions")
-        session_count = total_sessions['count'] if total_sessions else 0
-        print(f"   Total sessions in database: {session_count}")
-
-        if session_count > 0:
-            # Get sample sessions
-            sessions = db_handler.db.fetchall("""
-                SELECT session_id, user_id, created_at, updated_at, status 
-                FROM sessions 
-                ORDER BY created_at DESC 
-                LIMIT 5
-            """)
-            print(f"   Recent sessions:")
-            for session in sessions:
-                print(
-                    f"     - User: {session.get('user_id', 'N/A')}, Status: {session.get('status', 'N/A')}, Created: {session.get('created_at', 'N/A')}")
-        else:
-            print("   ⚠ No sessions found in database!")
-            print("   This is why the monitoring page shows no data.")
-            print("   Sessions should be created when users login.")
-    except Exception as e:
-        print(f"   ✗ Error reading sessions: {e}")
-else:
-    print("   ✗ Sessions table doesn't exist!")
-    print("   This is the problem - sessions table is required for monitoring.")
-
-# Step 6: Check workflows
-print("\n6. Checking workflows table...")
-if table_status.get('workflows'):
-    try:
-        total_workflows = db_handler.db.fetchone("SELECT COUNT(*) as count FROM workflows")
-        workflow_count = total_workflows['count'] if total_workflows else 0
-        print(f"   Total workflows in database: {workflow_count}")
-
-        if workflow_count > 0:
-            # Get sample workflows
-            workflows = db_handler.db.fetchall("""
-                SELECT workflow_id, name, status, created_by, created_at 
-                FROM workflows 
-                ORDER BY created_at DESC 
-                LIMIT 5
-            """)
-            print(f"   Recent workflows:")
-            for wf in workflows:
-                print(
-                    f"     - {wf.get('name', 'N/A')} by {wf.get('created_by', 'N/A')}, Status: {wf.get('status', 'N/A')}")
-    except Exception as e:
-        print(f"   ✗ Error reading workflows: {e}")
-else:
-    print("   ✗ Workflows table doesn't exist")
-
-# Step 7: Test the actual monitoring methods
-print("\n7. Testing monitoring methods...")
+# Check sessions exist
+print("\n2. Checking sessions table...")
 try:
-    from monitoring.monitoring_service import MonitoringService
+    sessions = db_handler.db.fetchall("SELECT * FROM sessions ORDER BY created_at DESC LIMIT 5")
+    print(f"   Found {len(sessions)} sessions")
 
-    monitoring = MonitoringService()
-    print("   ✓ MonitoringService created")
+    if sessions:
+        print("\n   Recent sessions:")
+        for session in sessions:
+            print(f"     - Session ID: {session.get('session_id', 'N/A')[:8]}...")
+            print(f"       User ID: {session.get('user_id', 'N/A')}")
+            print(f"       Created: {session.get('created_at', 'N/A')}")
+            print(f"       Updated: {session.get('updated_at', 'N/A')}")
+            print(f"       Status: {session.get('status', 'N/A')}")
+            print()
+    else:
+        print("   ✗ No sessions found!")
+        sys.exit(1)
+except Exception as e:
+    print(f"   ✗ Error: {e}")
+    sys.exit(1)
 
-    # Test get_user_stats
-    print("\n   Testing get_user_stats()...")
-    stats = monitoring.get_user_stats()
+# Check what monitoring methods return
+print("\n3. Testing monitoring methods...")
 
-    print(f"   Results:")
-    print(f"     - Today: {stats.get('today', 'N/A')}")
-    print(f"     - Last 7 days: {stats.get('last_7_days', 'N/A')}")
-    print(f"     - Total users: {stats.get('total', 'N/A')}")
-    print(f"     - Hourly data points: {len(stats.get('hourly_data', []))}")
-    print(f"     - Active sessions: {len(stats.get('active_sessions', []))}")
-    print(f"     - User stats: {len(stats.get('user_stats', []))}")
+# Test count_distinct_users_in_sessions
+print("\n   A. Testing count_distinct_users_in_sessions()...")
+try:
+    # Get today's timestamp
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_iso = today.isoformat()
 
-    if stats.get('active_sessions'):
-        print(f"\n   Active sessions found:")
-        for session in stats['active_sessions'][:3]:
-            print(f"     - {session}")
+    print(f"      Looking for sessions since: {today_iso}")
 
-    if stats.get('user_stats'):
-        print(f"\n   User statistics found:")
-        for user in stats['user_stats'][:3]:
-            print(f"     - {user}")
+    # Test the actual query
+    result = db_handler.db.fetchone(
+        "SELECT COUNT(DISTINCT user_id) as count FROM sessions WHERE created_at >= ?",
+        (today_iso,)
+    )
+    count = result['count'] if result else 0
+    print(f"      Result: {count} users")
+
+    if count == 0:
+        print("      ⚠ Query returned 0! Let's investigate...")
+
+        # Check all sessions
+        all_sessions = db_handler.db.fetchall("SELECT created_at FROM sessions")
+        print(f"      Total sessions in table: {len(all_sessions)}")
+
+        if all_sessions:
+            print("      Session created_at values:")
+            for s in all_sessions[:5]:
+                print(f"        - {s.get('created_at', 'N/A')}")
+
+            # Try comparing the timestamps
+            print(f"\n      Comparing timestamps:")
+            print(f"        Query looking for >= {today_iso}")
+            print(f"        Session created_at:     {all_sessions[0].get('created_at', 'N/A')}")
+
+            # Check if it's a format issue
+            session_time = all_sessions[0].get('created_at')
+            print(f"\n      Attempting to parse session timestamp...")
+            try:
+                parsed = datetime.fromisoformat(session_time.replace('Z', '+00:00'))
+                print(f"        Parsed successfully: {parsed}")
+                print(f"        Today cutoff:        {today}")
+                print(f"        Is session >= today? {parsed >= today}")
+            except Exception as e:
+                print(f"        ✗ Parse failed: {e}")
 
 except Exception as e:
-    print(f"   ✗ Error testing monitoring: {e}")
+    print(f"      ✗ Error: {e}")
     import traceback
 
     traceback.print_exc()
 
-# Step 8: Check database schema
-print("\n8. Checking sessions table schema...")
-if table_status.get('sessions'):
-    try:
-        schema = db_handler.db.fetchall("PRAGMA table_info(sessions)")
-        print("   Sessions table columns:")
-        for col in schema:
-            print(f"     - {col['name']} ({col['type']})")
-    except Exception as e:
-        print(f"   ✗ Error checking schema: {e}")
+# Test count_total_users
+print("\n   B. Testing count_total_users()...")
+try:
+    total = db_handler.count_total_users()
+    print(f"      Result: {total} users")
+except Exception as e:
+    print(f"      ✗ Error: {e}")
 
-# Step 9: Summary and recommendations
+# Test get_active_sessions_with_users
+print("\n   C. Testing get_active_sessions_with_users()...")
+try:
+    active = db_handler.get_active_sessions_with_users(limit=5)
+    print(f"      Result: {len(active)} active sessions")
+
+    if len(active) == 0:
+        print("      ⚠ No active sessions found!")
+
+        # Check session statuses
+        statuses = db_handler.db.fetchall("SELECT status, COUNT(*) as count FROM sessions GROUP BY status")
+        print("      Session status breakdown:")
+        for status in statuses:
+            print(f"        - {status['status']}: {status['count']}")
+    else:
+        print("      Active sessions:")
+        for s in active[:3]:
+            print(f"        - {s}")
+except Exception as e:
+    print(f"      ✗ Error: {e}")
+
+# Test the monitoring service directly
+print("\n4. Testing MonitoringService.get_user_stats()...")
+try:
+    from monitoring.monitoring_service import MonitoringService
+
+    monitoring = MonitoringService()
+
+    stats = monitoring.get_user_stats()
+
+    print("   Results from get_user_stats():")
+    print(f"     - today: {stats.get('today')}")
+    print(f"     - last_7_days: {stats.get('last_7_days')}")
+    print(f"     - total: {stats.get('total')}")
+    print(f"     - hourly_data points: {len(stats.get('hourly_data', []))}")
+    print(f"     - active_sessions: {len(stats.get('active_sessions', []))}")
+    print(f"     - user_stats: {len(stats.get('user_stats', []))}")
+
+    if stats.get('today') == 0:
+        print("\n   ⚠ 'today' is still 0! Let's check the time ranges...")
+        times = monitoring.get_time_ranges()
+        print(f"     Time ranges used:")
+        print(f"       - today: {times.get('today')}")
+        print(f"       - week_ago: {times.get('week_ago')}")
+        print(f"       - hour_ago: {times.get('hour_ago')}")
+
+        # Manually test the query with the exact time range
+        today_time = times.get('today')
+        print(f"\n     Testing query with today time: {today_time}")
+        test_result = db_handler.db.fetchone(
+            "SELECT COUNT(DISTINCT user_id) as count FROM sessions WHERE created_at >= ?",
+            (today_time,)
+        )
+        print(f"     Query result: {test_result}")
+
+except Exception as e:
+    print(f"   ✗ Error: {e}")
+    import traceback
+
+    traceback.print_exc()
+
+# Test the API endpoint
+print("\n5. Testing API endpoint /api/monitoring/users...")
+try:
+    # Try to import Flask app
+    try:
+        from app import app
+    except:
+        try:
+            from main import app
+        except:
+            print("   ⚠ Could not import Flask app, skipping API test")
+            app = None
+
+    if app:
+        with app.test_client() as client:
+            response = client.get('/api/monitoring/users')
+            print(f"   Status: {response.status_code}")
+
+            if response.status_code == 200:
+                data = response.get_json()
+                print(f"   Response data:")
+                print(json.dumps(data, indent=2, default=str))
+            else:
+                print(f"   Error response: {response.get_data(as_text=True)}")
+except Exception as e:
+    print(f"   ✗ Error: {e}")
+
+# Check browser console
+print("\n6. Browser-side checks...")
+print("   Please check the following in your browser:")
+print("   1. Open /monitoring/users")
+print("   2. Press F12 to open Developer Tools")
+print("   3. Go to Console tab - any JavaScript errors?")
+print("   4. Go to Network tab")
+print("   5. Refresh the page")
+print("   6. Click on the /api/monitoring/users request")
+print("   7. Check the Response - what does it show?")
+print()
+print("   Common issues:")
+print("   - Response shows all zeros? API is working but query/date issue")
+print("   - Response shows 'null' or error? API is crashing")
+print("   - No /api/monitoring/users request? JavaScript isn't running")
+print("   - Request is red/failed? API endpoint not found")
+
+# Summary
 print("\n" + "=" * 70)
-print("SUMMARY AND RECOMMENDATIONS")
+print("DIAGNOSTIC SUMMARY")
 print("=" * 70)
 
-issues_found = []
-recommendations = []
+print("\nQuick checklist:")
+sessions_exist = len(db_handler.db.fetchall("SELECT * FROM sessions")) > 0
+print(f"  [{'✓' if sessions_exist else '✗'}] Sessions exist in database")
 
-if not table_status.get('sessions'):
-    issues_found.append("❌ CRITICAL: Sessions table doesn't exist")
-    recommendations.append("Create sessions table with columns: session_id, user_id, created_at, updated_at, status")
-elif table_status.get('sessions'):
-    try:
-        total_sessions = db_handler.db.fetchone("SELECT COUNT(*) as count FROM sessions")
-        if total_sessions['count'] == 0:
-            issues_found.append("⚠ WARNING: Sessions table is empty")
-            recommendations.append("Ensure your login system creates session records in the database")
-            recommendations.append("Check if session tracking is enabled in your Flask app")
-    except:
-        pass
-
-if not table_status.get('users'):
-    issues_found.append("❌ CRITICAL: Users table doesn't exist")
-    recommendations.append("Create users table")
-elif table_status.get('users'):
-    try:
-        if db_handler.count_total_users() == 0:
-            issues_found.append("⚠ WARNING: Users table is empty")
-            recommendations.append("Create at least one user account")
-    except:
-        pass
-
-if issues_found:
-    print("\nIssues Found:")
-    for issue in issues_found:
-        print(f"  {issue}")
-
-    print("\nRecommendations:")
-    for i, rec in enumerate(recommendations, 1):
-        print(f"  {i}. {rec}")
-else:
-    print("\n✓ All checks passed - monitoring should be working")
-    print("  If you still see empty cards, check:")
-    print("  1. Browser console (F12) for JavaScript errors")
-    print("  2. Network tab to see API response")
-    print("  3. Try hard refresh (Ctrl+Shift+R)")
+try:
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    today_count = db_handler.db.fetchone(
+        "SELECT COUNT(DISTINCT user_id) as count FROM sessions WHERE created_at >= ?",
+        (today,)
+    )['count']
+    print(f"  [{'✓' if today_count > 0 else '✗'}] Query for today's sessions returns: {today_count}")
+except:
+    print(f"  [✗] Query for today's sessions failed")
 
 print("\n" + "=" * 70)
-print("DIAGNOSTIC COMPLETE")
+print("\nNext steps:")
+print("1. Check the output above for any ✗ marks")
+print("2. Look for timestamp format issues")
+print("3. Check browser console (F12) for errors")
+print("4. Share this output if you need more help")
 print("=" * 70)

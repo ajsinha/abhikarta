@@ -154,10 +154,18 @@ class ToolRoutes:
             action = data.get('action')  # 'enable' or 'disable'
 
             if action == 'enable':
-                if self.tool_registry.enable_tool(tool_name):
+                result = self.tool_registry.enable_tool(tool_name)
+                if result:
                     return jsonify({'success': True, 'message': f'Tool {tool_name} enabled'})
+                else:
+                    return jsonify({'success': False, 'error': f'Failed to enable tool {tool_name}'}), 400
             elif action == 'disable':
-                if self.tool_registry.disable_tool(tool_name):
+                result = self.tool_registry.disable_tool(tool_name)
+                if result:
                     return jsonify({'success': True, 'message': f'Tool {tool_name} disabled'})
+                else:
+                    return jsonify({'success': False, 'error': f'Failed to disable tool {tool_name}'}), 400
+            else:
+                return jsonify({'success': False, 'error': 'Invalid action. Must be "enable" or "disable"'}), 400
 
             return jsonify({'success': False, 'error': 'Failed to toggle tool'}), 400

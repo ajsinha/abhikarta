@@ -154,6 +154,8 @@
     </div>
 </div>
 
+<!-- CRITICAL FIX: Load jQuery BEFORE using it -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 let activityChart;
@@ -161,6 +163,8 @@ let statusChart;
 
 function loadPlannerMonitoring() {
     $.get('{{ url_for("api_monitoring_planner") }}', function(data) {
+        console.log('Planner API Response:', data);
+
         // Update summary cards
         $('#countToday').text(data.today || 0);
         $('#count7Days').text(data.last_7_days || 0);
@@ -222,16 +226,18 @@ function loadPlannerMonitoring() {
         } else {
             $('#recentPlansTable').html('<tr><td colspan="6" class="text-center text-muted">No plans</td></tr>');
         }
+    }).fail(function(xhr, status, error) {
+        console.error('Planner API Error:', status, error);
     });
 }
 
 function updateActivityChart(hourlyData) {
     const ctx = document.getElementById('activityChart').getContext('2d');
-    
+
     if (activityChart) {
         activityChart.destroy();
     }
-    
+
     activityChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -276,11 +282,11 @@ function updateActivityChart(hourlyData) {
 
 function updateStatusChart(statusData) {
     const ctx = document.getElementById('statusChart').getContext('2d');
-    
+
     if (statusChart) {
         statusChart.destroy();
     }
-    
+
     statusChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -313,10 +319,13 @@ function updateStatusChart(statusData) {
     });
 }
 
-// Initial load
-loadPlannerMonitoring();
+// Wait for DOM ready
+$(document).ready(function() {
+    console.log('Planner monitoring page ready');
+    loadPlannerMonitoring();
 
-// Auto-refresh every 30 seconds
-setInterval(loadPlannerMonitoring, 30000);
+    // Auto-refresh every 30 seconds
+    setInterval(loadPlannerMonitoring, 30000);
+});
 </script>
 {% endblock %}

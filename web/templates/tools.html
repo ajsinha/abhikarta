@@ -82,13 +82,24 @@ function toggleTool(toolName, action) {
         }),
         success: function(response) {
             if (response.success) {
+                alert('Success: ' + response.message);
                 location.reload();
             } else {
                 alert('Error: ' + (response.error || 'Failed to ' + action + ' tool'));
             }
         },
-        error: function() {
-            alert('Error ' + action + 'ing tool');
+        error: function(xhr, status, error) {
+            console.error('Toggle tool error:', xhr.responseText);
+            let errorMsg = 'Error ' + action + 'ing tool';
+            try {
+                const response = JSON.parse(xhr.responseText);
+                if (response.error) {
+                    errorMsg = response.error;
+                }
+            } catch (e) {
+                console.error('Could not parse error response:', e);
+            }
+            alert(errorMsg);
         }
     });
 }

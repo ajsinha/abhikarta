@@ -108,20 +108,33 @@
     </div>
 </div>
 
+<!-- CRITICAL FIX: Load jQuery BEFORE using it -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 let activityChart;
 
 function loadUserMonitoring() {
+    // Verify jQuery is loaded
+    if (typeof $ === 'undefined') {
+        console.error('jQuery is not loaded!');
+        document.getElementById('countToday').textContent = 'ERROR';
+        document.getElementById('count7Days').textContent = 'jQuery';
+        document.getElementById('countTotal').textContent = 'Missing';
+        return;
+    }
+
     $.get('{{ url_for("api_monitoring_users") }}', function(data) {
+        console.log('API Response:', data); // Debug log
+
         // Update summary cards
         $('#countToday').text(data.today || 0);
         $('#count7Days').text(data.last_7_days || 0);
         $('#countTotal').text(data.total || 0);
-        
+
         // Update chart
         updateChart(data.hourly_data || []);
-        
+
         // Update active sessions table
         if (data.active_sessions && data.active_sessions.length > 0) {
             let html = '';
@@ -138,7 +151,7 @@ function loadUserMonitoring() {
         } else {
             $('#activeSessionsTable').html('<tr><td colspan="5" class="text-center text-muted">No active sessions</td></tr>');
         }
-        
+
         // Update user statistics table
         if (data.user_stats && data.user_stats.length > 0) {
             let html = '';
@@ -155,16 +168,21 @@ function loadUserMonitoring() {
         } else {
             $('#userStatsTable').html('<tr><td colspan="5" class="text-center text-muted">No user data</td></tr>');
         }
+    }).fail(function(xhr, status, error) {
+        console.error('API Error:', status, error);
+        $('#countToday').text('API');
+        $('#count7Days').text('Error');
+        $('#countTotal').text('!');
     });
 }
 
 function updateChart(hourlyData) {
     const ctx = document.getElementById('activityChart').getContext('2d');
-    
+
     if (activityChart) {
         activityChart.destroy();
     }
-    
+
     activityChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -199,10 +217,13 @@ function updateChart(hourlyData) {
     });
 }
 
-// Initial load
-loadUserMonitoring();
+// Wait for DOM to be ready before running
+$(document).ready(function() {
+    console.log('Document ready, loading user monitoring...');
+    loadUserMonitoring();
 
-// Auto-refresh every 30 seconds
-setInterval(loadUserMonitoring, 30000);
+    // Auto-refresh every 30 seconds
+    setInterval(loadUserMonitoring, 30000);
+});
 </script>
 {% endblock %}
