@@ -32,6 +32,9 @@ from routes.lgraph_planner_routes import LGraphPlannerRoutes
 from routes.user_routes import UserRoutes
 from routes.monitoring_routes import MonitoringRoutes
 from routes.config_routes import ConfigRoutes
+from routes.llm_routes import LLMRoutes
+
+from llm.llm_facade import LLMFacade
 
 
 class AbhikartaApp:
@@ -69,6 +72,16 @@ class AbhikartaApp:
         self.app = Flask(__name__)
         self.app.secret_key = os.urandom(24)
 
+        self.app.template_filter('format_number')
+        def format_number(value):
+            try:
+                num = float(value)
+                if num >= 1000:
+                    return f"{num / 1000:.0f}"
+                return str(int(num))
+            except:
+                return str(value)
+
     def _load_configuration(self):
         """Load application configuration"""
         self.props = PropertiesConfigurator()
@@ -102,6 +115,8 @@ class AbhikartaApp:
         admin_required = auth_routes.admin_required
 
         # Initialize all other route classes
+        llm_routes = LLMRoutes(self.app, LLMFacade, login_required, admin_required)
+
         dashboard_routes = DashboardRoutes(
             self.app, self.user_registry, self.orchestrator,
             self.tool_registry, get_database_handler(), login_required

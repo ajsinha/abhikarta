@@ -1,0 +1,565 @@
+{% extends "base.html" %}
+{% block title %}LLM Management{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-brain"></i> LLM Management</h1>
+        <p class="text-muted">Manage Language Model providers and configurations</p>
+    </div>
+    <div class="col text-end">
+        {% if user.is_admin() %}
+        <button class="btn btn-info" onclick="refreshConfig()">
+            <i class="fas fa-sync"></i> Refresh Config
+        </button>
+        <button class="btn btn-success" onclick="testConnection()">
+            <i class="fas fa-vial"></i> Test Connections
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Configuration Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-server"></i> Providers</h5>
+                <h2>{{ config.total_providers }}</h2>
+                <small>{{ config.enabled_providers }} enabled</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-robot"></i> Models</h5>
+                <h2>{{ config.total_models }}</h2>
+                <small>{{ config.enabled_models }} enabled</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-star"></i> Default</h5>
+                <h5>{{ config.default_provider }}/{{ config.default_model }}</h5>
+                <small>System default LLM</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-clock"></i> Last Refresh</h5>
+                <h6>{{ config.last_refresh }}</h6>
+                <small>Auto-refresh every 10 min</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Provider Tabs -->
+<div class="card">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" id="providerTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button">
+                    <i class="fas fa-list"></i> All Models
+                </button>
+            </li>
+            {% for provider_name in providers %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="{{ provider_name }}-tab" data-bs-toggle="tab" 
+                        data-bs-target="#{{ provider_name }}" type="button">
+                    {% if provider_name == 'anthropic' %}<i class="fas fa-brain"></i>
+                    {% elif provider_name == 'openai' %}<i class="fas fa-robot"></i>
+                    {% elif provider_name == 'google' %}<i class="fab fa-google"></i>
+                    {% elif provider_name == 'meta' %}<i class="fab fa-meta"></i>
+                    {% elif provider_name == 'aws_bedrock' %}<i class="fab fa-aws"></i>
+                    {% else %}<i class="fas fa-server"></i>
+                    {% endif %}
+                    {{ provider_name | title }}
+                    {% if providers[provider_name].enabled %}
+                        <span class="badge bg-success">On</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Off</span>
+                    {% endif %}
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="providerTabContent">
+            <!-- All Models Tab -->
+            <div class="tab-pane fade show active" id="all" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="allModelsTable">
+                        <thead>
+                            <tr>
+                                <th>Provider</th>
+                                <th>Model</th>
+                                <th>Model ID</th>
+                                <th>Context</th>
+                                <th>Cost (Input/Output per 1M)</th>
+                                <th>Best For</th>
+                                <th>Features</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for provider_name, provider_info in providers.items() %}
+                                {% for model_name, model_info in provider_info.models.items() %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-primary">{{ provider_name }}</span>
+                                    </td>
+                                    <td><strong>{{ model_name }}</strong></td>
+                                    <td><code>{{ model_info.model_id }}</code></td>
+                                    <td>{% if model_info.context_window >= 1000000 %}{{ (model_info.context_window / 1000000) | int }}M{% elif model_info.context_window >= 1000 %}{{ (model_info.context_window / 1000) | int }}K{% else %}{{ model_info.context_window }}{% endif %}</td>
+                                    <td>
+                                        <small class="text-success">${{ "%.2f" | format(model_info.cost_per_1m_input_tokens) }}</small> /
+                                        <small class="text-danger">${{ "%.2f" | format(model_info.cost_per_1m_output_tokens) }}</small>
+                                    </td>
+                                    <td>
+                                        {% for tag in model_info.best_for[:2] %}
+                                            <span class="badge bg-info text-dark">{{ tag }}</span>
+                                        {% endfor %}
+                                        {% if model_info.best_for | length > 2 %}
+                                            <span class="badge bg-light text-dark">+{{ model_info.best_for | length - 2 }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if model_info.supports_vision %}
+                                            <i class="fas fa-eye" title="Vision"></i>
+                                        {% endif %}
+                                        {% if model_info.supports_function_calling %}
+                                            <i class="fas fa-code" title="Function Calling"></i>
+                                        {% endif %}
+                                        {% if model_info.supports_streaming %}
+                                            <i class="fas fa-stream" title="Streaming"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if provider_info.enabled and model_info.enabled %}
+                                            <span class="badge bg-success">Enabled</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Disabled</span>
+                                        {% endif %}
+                                        {% if provider_name == config.default_provider and model_name == config.default_model %}
+                                            <span class="badge bg-warning text-dark">Default</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-info btn-sm"
+                                                    onclick="viewModelDetails('{{ provider_name }}', '{{ model_name }}')"
+                                                    title="View Details">
+                                                <i class="fas fa-info-circle"></i>
+                                            </button>
+                                            <button class="btn btn-primary btn-sm"
+                                                    onclick="testModel('{{ provider_name }}', '{{ model_name }}')"
+                                                    title="Test Model"
+                                                    {% if not (provider_info.enabled and model_info.enabled) %}disabled{% endif %}>
+                                                <i class="fas fa-vial"></i>
+                                            </button>
+                                            {% if user.is_admin() %}
+                                                <button class="btn btn-warning btn-sm"
+                                                        onclick="setDefault('{{ provider_name }}', '{{ model_name }}')"
+                                                        title="Set as Default">
+                                                    <i class="fas fa-star"></i>
+                                                </button>
+                                                {% if provider_info.enabled and model_info.enabled %}
+                                                    <button class="btn btn-secondary btn-sm"
+                                                            onclick="toggleModel('{{ provider_name }}', '{{ model_name }}', 'disable')"
+                                                            title="Disable">
+                                                        <i class="fas fa-power-off"></i>
+                                                    </button>
+                                                {% else %}
+                                                    <button class="btn btn-success btn-sm"
+                                                            onclick="toggleModel('{{ provider_name }}', '{{ model_name }}', 'enable')"
+                                                            title="Enable">
+                                                        <i class="fas fa-check"></i>
+                                                    </button>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Individual Provider Tabs -->
+            {% for provider_name, provider_info in providers.items() %}
+            <div class="tab-pane fade" id="{{ provider_name }}" role="tabpanel">
+                <h4>{{ provider_name | title }} Provider</h4>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p><strong>Status:</strong>
+                            {% if provider_info.enabled %}
+                                <span class="badge bg-success">Enabled</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Disabled</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>API Key:</strong> <code>{{ provider_info.api_key_env or 'Not configured' }}</code></p>
+                        {% if provider_info.base_url %}
+                            <p><strong>Base URL:</strong> <code>{{ provider_info.base_url }}</code></p>
+                        {% endif %}
+                        <p><strong>Models:</strong> {{ provider_info.models | length }} total</p>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        {% if user.is_admin() %}
+                            {% if provider_info.enabled %}
+                                <button class="btn btn-warning" onclick="toggleProvider('{{ provider_name }}', 'disable')">
+                                    <i class="fas fa-power-off"></i> Disable Provider
+                                </button>
+                            {% else %}
+                                <button class="btn btn-success" onclick="toggleProvider('{{ provider_name }}', 'enable')">
+                                    <i class="fas fa-check"></i> Enable Provider
+                                </button>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Model</th>
+                                <th>Description</th>
+                                <th>Context Window</th>
+                                <th>Cost</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for model_name, model_info in provider_info.models.items() %}
+                            <tr>
+                                <td>
+                                    <strong>{{ model_name }}</strong><br>
+                                    <small class="text-muted">{{ model_info.model_id }}</small>
+                                </td>
+                                <td>
+                                    {{ model_info.description }}<br>
+                                    <small>
+                                        {% for tag in model_info.best_for[:3] %}
+                                            <span class="badge bg-info text-dark">{{ tag }}</span>
+                                        {% endfor %}
+                                    </small>
+                                </td>
+                                <td>{% if model_info.context_window >= 1000000 %}{{ (model_info.context_window / 1000000) | int }}M{% elif model_info.context_window >= 1000 %}{{ (model_info.context_window / 1000) | int }}K{% else %}{{ model_info.context_window }}{% endif %} tokens</td>
+                                <td>
+                                    <small>In: ${{ "%.2f" | format(model_info.cost_per_1m_input_tokens) }}/1M</small><br>
+                                    <small>Out: ${{ "%.2f" | format(model_info.cost_per_1m_output_tokens) }}/1M</small>
+                                </td>
+                                <td>
+                                    {% if model_info.enabled %}
+                                        <span class="badge bg-success">Enabled</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Disabled</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary"
+                                            onclick="testModel('{{ provider_name }}', '{{ model_name }}')"
+                                            {% if not (provider_info.enabled and model_info.enabled) %}disabled{% endif %}>
+                                        <i class="fas fa-vial"></i> Test
+                                    </button>
+                                    {% if user.is_admin() %}
+                                        <button class="btn btn-sm btn-warning"
+                                                onclick="setDefault('{{ provider_name }}', '{{ model_name }}')">
+                                            <i class="fas fa-star"></i>
+                                        </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Model Details Modal -->
+<div class="modal fade" id="modelDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Model Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modelDetailsBody">
+                <!-- Details loaded via JS -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Results Modal -->
+<div class="modal fade" id="testResultsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Test Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="testResultsBody">
+                <!-- Results loaded via JS -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+// Page ready
+$(document).ready(function() {
+    console.log('LLM Management page loaded');
+    console.log('Total providers:', {{ providers | length }});
+    console.log('Total models:', $('tbody tr').length);
+});
+
+// Refresh configuration
+function refreshConfig() {
+    if (!confirm('Refresh LLM configuration from file?')) {
+        return;
+    }
+
+    $.ajax({
+        url: '{{ url_for("api_refresh_llm_config") }}',
+        method: 'POST',
+        success: function(response) {
+            if (response.success) {
+                alert('Configuration refreshed successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + (response.error || 'Failed to refresh configuration'));
+            }
+        },
+        error: function(xhr) {
+            alert('Error refreshing configuration: ' + xhr.responseText);
+        }
+    });
+}
+
+// Test all connections
+function testConnection() {
+    alert('Testing all enabled provider connections...');
+
+    $.ajax({
+        url: '{{ url_for("api_test_all_llm_connections") }}',
+        method: 'POST',
+        success: function(response) {
+            const results = response.results || {};
+            let message = 'Connection Test Results:\n\n';
+
+            for (const [provider, result] of Object.entries(results)) {
+                message += `${provider}: ${result.success ? '✓ Success' : '✗ Failed'}\n`;
+                if (!result.success) {
+                    message += `  Error: ${result.error}\n`;
+                }
+            }
+
+            alert(message);
+        },
+        error: function(xhr) {
+            alert('Error testing connections: ' + xhr.responseText);
+        }
+    });
+}
+
+// View model details
+function viewModelDetails(provider, model) {
+    $.ajax({
+        url: '{{ url_for("api_get_llm_model_details") }}',
+        method: 'GET',
+        data: { provider: provider, model: model },
+        success: function(response) {
+            if (response.success) {
+                const details = response.details;
+                let html = `
+                    <h5>${provider} / ${model}</h5>
+                    <hr>
+                    <p><strong>Model ID:</strong> <code>${details.model_id}</code></p>
+                    <p><strong>Version:</strong> ${details.version}</p>
+                    <p><strong>Description:</strong> ${details.description}</p>
+                    <p><strong>Context Window:</strong> ${details.context_window.toLocaleString()} tokens</p>
+                    <p><strong>Max Tokens:</strong> ${details.max_tokens.toLocaleString()}</p>
+                    <hr>
+                    <h6>Pricing</h6>
+                    <p><strong>Input:</strong> $${details.cost_per_1m_input_tokens.toFixed(2)} per 1M tokens</p>
+                    <p><strong>Output:</strong> $${details.cost_per_1m_output_tokens.toFixed(2)} per 1M tokens</p>
+                    <hr>
+                    <h6>Best For</h6>
+                    <ul>
+                        ${details.best_for.map(tag => `<li>${tag}</li>`).join('')}
+                    </ul>
+                    <hr>
+                    <h6>Features</h6>
+                    <p>
+                        <span class="badge bg-${details.supports_vision ? 'success' : 'secondary'}">Vision</span>
+                        <span class="badge bg-${details.supports_function_calling ? 'success' : 'secondary'}">Function Calling</span>
+                        <span class="badge bg-${details.supports_streaming ? 'success' : 'secondary'}">Streaming</span>
+                    </p>
+                `;
+
+                $('#modelDetailsBody').html(html);
+                $('#modelDetailsModal').modal('show');
+            }
+        },
+        error: function(xhr) {
+            alert('Error loading model details');
+        }
+    });
+}
+
+// Test specific model
+function testModel(provider, model) {
+    alert(`Testing ${provider}/${model}...`);
+
+    $('#testResultsBody').html('<div class="text-center"><i class="fas fa-spinner fa-spin fa-3x"></i><p>Testing model...</p></div>');
+    $('#testResultsModal').modal('show');
+
+    $.ajax({
+        url: '{{ url_for("api_test_llm_model") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ provider: provider, model: model }),
+        success: function(response) {
+            let html = `
+                <h5>Test Results: ${provider} / ${model}</h5>
+                <hr>
+            `;
+
+            if (response.success) {
+                html += `
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i> Test Successful
+                    </div>
+                    <h6>Response:</h6>
+                    <pre class="bg-light p-3">${response.response}</pre>
+                    <h6>Duration:</h6>
+                    <p>${response.duration.toFixed(2)} seconds</p>
+                `;
+            } else {
+                html += `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle"></i> Test Failed
+                    </div>
+                    <h6>Error:</h6>
+                    <pre class="bg-light p-3">${response.error}</pre>
+                `;
+            }
+
+            $('#testResultsBody').html(html);
+        },
+        error: function(xhr) {
+            $('#testResultsBody').html(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-times-circle"></i> Request Failed
+                </div>
+                <pre>${xhr.responseText}</pre>
+            `);
+        }
+    });
+}
+
+// Set default model
+function setDefault(provider, model) {
+    if (!confirm(`Set ${provider}/${model} as default system LLM?`)) {
+        return;
+    }
+
+    $.ajax({
+        url: '{{ url_for("api_set_default_llm") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ provider: provider, model: model }),
+        success: function(response) {
+            if (response.success) {
+                alert('Default LLM updated successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            alert('Error setting default: ' + xhr.responseText);
+        }
+    });
+}
+
+// Toggle model
+function toggleModel(provider, model, action) {
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${provider}/${model}?`)) {
+        return;
+    }
+
+    $.ajax({
+        url: '{{ url_for("api_toggle_llm_model") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ provider: provider, model: model, action: action }),
+        success: function(response) {
+            if (response.success) {
+                alert(`Model ${action}d successfully!`);
+                location.reload();
+            } else {
+                alert('Error: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            alert('Error toggling model: ' + xhr.responseText);
+        }
+    });
+}
+
+// Toggle provider
+function toggleProvider(provider, action) {
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} all models for ${provider}?`)) {
+        return;
+    }
+
+    $.ajax({
+        url: '{{ url_for("api_toggle_llm_provider") }}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ provider: provider, action: action }),
+        success: function(response) {
+            if (response.success) {
+                alert(`Provider ${action}d successfully!`);
+                location.reload();
+            } else {
+                alert('Error: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            alert('Error toggling provider: ' + xhr.responseText);
+        }
+    });
+}
+</script>
+
+{% block extra_head %}
+<style>
+    .table td {
+        vertical-align: middle;
+    }
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+{% endblock %}
