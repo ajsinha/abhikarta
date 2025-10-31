@@ -575,3 +575,207 @@ class MonitoringService:
             'pending_hitl': pending_hitl,
             'recent_activity': recent_activity
         }
+
+    # ========== SYSTEM HEALTH MONITORING ==========
+
+    def _collect_system_metrics(self) -> Dict[str, Any]:
+        """Collect OS-level system metrics"""
+        import platform
+        import sys
+        
+        metrics = {
+            'os': 'Unknown',
+            'python_version': sys.version.split()[0],
+            'architecture': platform.machine(),
+            'hostname': platform.node(),
+            'cpu_cores': 'N/A',
+            'cpu_percent': 0,
+            'memory_percent': 0,
+            'memory_used': 'N/A',
+            'memory_total': 'N/A',
+            'disk_percent': 0,
+            'disk_free': 'N/A',
+            'disk_total': 'N/A'
+        }
+        
+        # Get OS info
+        try:
+            metrics['os'] = f"{platform.system()} {platform.release()}"
+        except Exception:
+            pass
+        
+        # Try to use psutil for system metrics if available
+        try:
+            import psutil
+            
+            # CPU metrics
+            metrics['cpu_percent'] = psutil.cpu_percent(interval=0.1)
+            metrics['cpu_cores'] = psutil.cpu_count()
+            
+            # Memory metrics
+            memory = psutil.virtual_memory()
+            metrics['memory_percent'] = memory.percent
+            metrics['memory_used'] = f"{memory.used / (1024**3):.1f} GB"
+            metrics['memory_total'] = f"{memory.total / (1024**3):.1f} GB"
+            
+            # Disk metrics
+            disk = psutil.disk_usage('/')
+            metrics['disk_percent'] = disk.percent
+            metrics['disk_free'] = f"{disk.free / (1024**3):.1f} GB"
+            metrics['disk_total'] = f"{disk.total / (1024**3):.1f} GB"
+            
+        except ImportError:
+            # psutil not available - use basic info only
+            pass
+        except Exception as e:
+            print(f"Error collecting system metrics: {e}")
+        
+        return metrics
+
+    def get_system_health_stats(self) -> Dict[str, Any]:
+        """Get system health statistics"""
+        times = self.get_time_ranges()
+        now = datetime.now()
+
+        # Collect OS-level metrics
+        system_metrics = self._collect_system_metrics()
+
+        # Database status check
+        db_status = 'Connected'
+        db_latency = 'N/A'
+        try:
+            start_time = datetime.now()
+            # Simple query to check database connectivity
+            self.db_handler.count_total_users()
+            latency = (datetime.now() - start_time).total_seconds() * 1000
+            db_latency = f'{latency:.2f}ms'
+        except Exception as e:
+            db_status = 'Error'
+            db_latency = str(e)
+
+        # Error statistics (if error_logs table exists)
+        total_errors = 0
+        error_rate = 0
+        error_timeline = []
+        error_types = {}
+        recent_errors = []
+
+        try:
+            if self.db_handler.table_exists('error_logs'):
+                # Count errors in last 24 hours
+                time_24h_ago = (now - timedelta(hours=24)).isoformat()
+                total_errors = self.db_handler.count_errors_since(time_24h_ago)
+
+                # Calculate error rate (errors per hour)
+                if total_errors > 0:
+                    error_rate = total_errors / 24
+
+                # Get error timeline (last hour in 10-min intervals)
+                intervals = self.get_10min_intervals()
+                for interval in intervals:
+                    count = self.db_handler.count_errors_in_time_range(
+                        interval['start'], interval['end']
+                    )
+                    error_timeline.append({
+                        'time': interval['time'],
+                        'count': count
+                    })
+
+                # Get error type distribution
+                error_types = self.db_handler.get_error_type_distribution(time_24h_ago)
+
+                # Get recent errors
+                recent_errors = self.db_handler.get_recent_errors(limit=10)
+        except Exception as e:
+            print(f"Error fetching error logs: {e}")
+
+        # Response time statistics (mock data for now - can be enhanced with actual metrics)
+        response_times = []
+        intervals = self.get_10min_intervals()
+        for interval in intervals:
+            # This would ideally come from actual performance logs
+            response_times.append({
+                'time': interval['time'],
+                'avg_time': 50  # Mock average response time in ms
+            })
+
+        # Service status checks
+        services = {
+            'database': {
+                'status': 'up' if db_status == 'Connected' else 'down',
+                'message': db_status
+            },
+            'workflow': {
+                'status': 'up',
+                'message': 'Running'
+            },
+            'agent': {
+                'status': 'up',
+                'message': 'Running'
+            }
+        }
+
+        # Check workflow service by checking for recent workflow executions
+        try:
+            if self.db_handler.table_exists('workflow_executions'):
+                recent_workflows = self.db_handler.count_workflows_by_time(times['hour_ago'])
+                services['workflow']['message'] = f'{recent_workflows} executions in last hour'
+        except Exception:
+            services['workflow']['status'] = 'degraded'
+            services['workflow']['message'] = 'Unknown'
+
+        # Check agent service by checking for recent agent executions
+        try:
+            if self.db_handler.table_exists('agent_nodes'):
+                recent_agents = self.db_handler.count_agent_nodes(times['hour_ago'])
+                services['agent']['message'] = f'{recent_agents} executions in last hour'
+        except Exception:
+            services['agent']['status'] = 'degraded'
+            services['agent']['message'] = 'Unknown'
+
+        # Overall system status
+        overall_status = 'healthy'
+        if db_status != 'Connected' or error_rate > 10:
+            overall_status = 'unhealthy'
+        elif error_rate > 5:
+            overall_status = 'degraded'
+
+        # Performance metrics
+        performance_metrics = [
+            {
+                'name': 'Database Response Time',
+                'value': db_latency,
+                'status': 'good' if db_status == 'Connected' else 'critical'
+            },
+            {
+                'name': 'Error Rate',
+                'value': f'{error_rate:.2f}/hour',
+                'status': 'good' if error_rate < 5 else 'warning' if error_rate < 10 else 'critical'
+            },
+            {
+                'name': 'Active Connections',
+                'value': 'N/A',
+                'status': 'good'
+            }
+        ]
+
+        # Uptime (would need to be tracked separately in production)
+        uptime = 'N/A'
+        last_restart = 'Unknown'
+
+        return {
+            'overall_status': overall_status,
+            'db_status': db_status,
+            'db_latency': db_latency,
+            'error_rate': error_rate,
+            'total_errors': total_errors,
+            'uptime': uptime,
+            'last_restart': last_restart,
+            'services': services,
+            'system_metrics': system_metrics,
+            'error_timeline': error_timeline,
+            'response_times': response_times,
+            'error_types': error_types,
+            'performance_metrics': performance_metrics,
+            'recent_errors': recent_errors
+        }

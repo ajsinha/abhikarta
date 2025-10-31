@@ -1,0 +1,613 @@
+{% extends "base.html" %}
+{% block title %}System Health{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-heartbeat"></i> System Health</h1>
+        <p class="text-muted">Overall system health, errors, and performance metrics</p>
+    </div>
+    <div class="col text-end">
+        <a href="{{ url_for('monitoring_dashboard') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- System Status Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">System Status</h6>
+                <div id="systemStatusIcon" class="mb-2">
+                    <i class="fas fa-circle-notch fa-spin fa-3x text-muted"></i>
+                </div>
+                <h3 id="systemStatus">Checking...</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Database</h6>
+                <h2 id="dbStatus">-</h2>
+                <small id="dbLatency">Latency: -</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Error Rate (24h)</h6>
+                <h2 id="errorRate">-</h2>
+                <small>Total errors: <span id="totalErrors">-</span></small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">Uptime</h6>
+                <h2 id="uptime">-</h2>
+                <small id="lastRestart">Last restart: -</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System/OS Metrics -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-microchip"></i> System Metrics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- CPU Usage -->
+                    <div class="col-md-3 mb-3">
+                        <div class="text-center">
+                            <h6 class="text-muted mb-3">CPU Usage</h6>
+                            <div class="position-relative d-inline-block">
+                                <canvas id="cpuGauge" width="120" height="120"></canvas>
+                                <div class="position-absolute top-50 start-50 translate-middle">
+                                    <h3 class="mb-0" id="cpuValue">-</h3>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">Cores: <span id="cpuCores">-</span></small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Memory Usage -->
+                    <div class="col-md-3 mb-3">
+                        <div class="text-center">
+                            <h6 class="text-muted mb-3">Memory Usage</h6>
+                            <div class="position-relative d-inline-block">
+                                <canvas id="memoryGauge" width="120" height="120"></canvas>
+                                <div class="position-absolute top-50 start-50 translate-middle">
+                                    <h3 class="mb-0" id="memoryValue">-</h3>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">Used: <span id="memoryUsed">-</span> / <span id="memoryTotal">-</span></small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Disk Usage -->
+                    <div class="col-md-3 mb-3">
+                        <div class="text-center">
+                            <h6 class="text-muted mb-3">Disk Usage</h6>
+                            <div class="position-relative d-inline-block">
+                                <canvas id="diskGauge" width="120" height="120"></canvas>
+                                <div class="position-absolute top-50 start-50 translate-middle">
+                                    <h3 class="mb-0" id="diskValue">-</h3>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">Free: <span id="diskFree">-</span> / <span id="diskTotal">-</span></small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- System Info -->
+                    <div class="col-md-3 mb-3">
+                        <h6 class="text-muted mb-3">System Info</h6>
+                        <table class="table table-sm table-borderless">
+                            <tr>
+                                <td class="text-muted">OS:</td>
+                                <td><strong id="osInfo">-</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Python:</td>
+                                <td><strong id="pythonVersion">-</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Architecture:</td>
+                                <td><strong id="architecture">-</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Hostname:</td>
+                                <td><strong id="hostname">-</strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Service Status Cards -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-server"></i> Service Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i id="dbServiceIcon" class="fas fa-circle text-muted me-2"></i>
+                            <div>
+                                <strong>Database Service</strong><br>
+                                <small class="text-muted" id="dbServiceStatus">Checking...</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i id="workflowServiceIcon" class="fas fa-circle text-muted me-2"></i>
+                            <div>
+                                <strong>Workflow Engine</strong><br>
+                                <small class="text-muted" id="workflowServiceStatus">Checking...</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i id="agentServiceIcon" class="fas fa-circle text-muted me-2"></i>
+                            <div>
+                                <strong>Agent Service</strong><br>
+                                <small class="text-muted" id="agentServiceStatus">Checking...</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line"></i> Error Rate (Last Hour)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="errorChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Response Times (Last Hour)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="responseTimeChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Distribution -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Error Type Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="errorTypeChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-tachometer-alt"></i> Performance Metrics</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Value</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="performanceMetrics">
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Errors -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-exclamation-circle"></i> Recent Errors & Warnings</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Severity</th>
+                        <th>Component</th>
+                        <th>Message</th>
+                        <th>User</th>
+                    </tr>
+                </thead>
+                <tbody id="recentErrorsTable">
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+let errorChart;
+let responseTimeChart;
+let errorTypeChart;
+let cpuGauge;
+let memoryGauge;
+let diskGauge;
+
+function loadSystemHealth() {
+    $.get('{{ url_for("api_monitoring_health") }}', function(data) {
+        console.log('System Health API Response:', data);
+
+        // Update system status
+        updateSystemStatus(data.overall_status);
+
+        // Update status cards
+        $('#dbStatus').text(data.db_status || 'Unknown');
+        $('#dbLatency').text('Latency: ' + (data.db_latency || 'N/A'));
+        $('#errorRate').text((data.error_rate || 0).toFixed(2) + '%');
+        $('#totalErrors').text(data.total_errors || 0);
+        $('#uptime').text(data.uptime || 'Unknown');
+        $('#lastRestart').text('Last restart: ' + (data.last_restart || 'Unknown'));
+
+        // Update OS/System metrics
+        updateSystemMetrics(data.system_metrics || {});
+
+        // Update service status
+        updateServiceStatus('dbServiceIcon', 'dbServiceStatus', data.services?.database);
+        updateServiceStatus('workflowServiceIcon', 'workflowServiceStatus', data.services?.workflow);
+        updateServiceStatus('agentServiceIcon', 'agentServiceStatus', data.services?.agent);
+
+        // Update charts
+        updateErrorChart(data.error_timeline || []);
+        updateResponseTimeChart(data.response_times || []);
+        updateErrorTypeChart(data.error_types || {});
+
+        // Update performance metrics
+        updatePerformanceMetrics(data.performance_metrics || []);
+
+        // Update recent errors table
+        updateRecentErrors(data.recent_errors || []);
+    }).fail(function(xhr, status, error) {
+        console.error('System Health API Error:', status, error);
+        $('#systemStatus').text('Error');
+        $('#systemStatusIcon').html('<i class="fas fa-exclamation-triangle fa-3x text-danger"></i>');
+    });
+}
+
+function updateSystemStatus(status) {
+    const statusConfig = {
+        'healthy': {
+            icon: '<i class="fas fa-check-circle fa-3x text-success"></i>',
+            text: 'Healthy',
+            class: 'text-success'
+        },
+        'degraded': {
+            icon: '<i class="fas fa-exclamation-triangle fa-3x text-warning"></i>',
+            text: 'Degraded',
+            class: 'text-warning'
+        },
+        'unhealthy': {
+            icon: '<i class="fas fa-times-circle fa-3x text-danger"></i>',
+            text: 'Unhealthy',
+            class: 'text-danger'
+        }
+    };
+
+    const config = statusConfig[status] || statusConfig['degraded'];
+    $('#systemStatusIcon').html(config.icon);
+    $('#systemStatus').text(config.text).attr('class', config.class);
+}
+
+function updateServiceStatus(iconId, statusId, service) {
+    if (!service) {
+        $('#' + iconId).removeClass().addClass('fas fa-circle text-muted me-2');
+        $('#' + statusId).text('Unknown');
+        return;
+    }
+
+    const colorClass = service.status === 'up' ? 'text-success' :
+                       service.status === 'down' ? 'text-danger' : 'text-warning';
+    
+    $('#' + iconId).removeClass().addClass('fas fa-circle ' + colorClass + ' me-2');
+    $('#' + statusId).text(service.message || service.status);
+}
+
+function updateErrorChart(timeline) {
+    const ctx = document.getElementById('errorChart').getContext('2d');
+
+    if (errorChart) {
+        errorChart.destroy();
+    }
+
+    errorChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: timeline.map(d => d.time),
+            datasets: [{
+                label: 'Errors',
+                data: timeline.map(d => d.count),
+                borderColor: 'rgb(255, 99, 132)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateResponseTimeChart(responseTimes) {
+    const ctx = document.getElementById('responseTimeChart').getContext('2d');
+
+    if (responseTimeChart) {
+        responseTimeChart.destroy();
+    }
+
+    responseTimeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: responseTimes.map(d => d.time),
+            datasets: [{
+                label: 'Response Time (ms)',
+                data: responseTimes.map(d => d.avg_time),
+                backgroundColor: 'rgba(54, 162, 235, 0.8)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function updateErrorTypeChart(errorTypes) {
+    const ctx = document.getElementById('errorTypeChart').getContext('2d');
+
+    if (errorTypeChart) {
+        errorTypeChart.destroy();
+    }
+
+    const labels = Object.keys(errorTypes);
+    const data = Object.values(errorTypes);
+
+    errorTypeChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels.length > 0 ? labels : ['No Errors'],
+            datasets: [{
+                data: data.length > 0 ? data : [1],
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 206, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function updatePerformanceMetrics(metrics) {
+    if (!metrics || metrics.length === 0) {
+        $('#performanceMetrics').html('<tr><td colspan="3" class="text-center text-muted">No metrics available</td></tr>');
+        return;
+    }
+
+    let html = '';
+    metrics.forEach(function(metric) {
+        const statusColors = {
+            'good': 'success',
+            'warning': 'warning',
+            'critical': 'danger'
+        };
+        const badgeColor = statusColors[metric.status] || 'secondary';
+
+        html += `<tr>
+            <td>${metric.name}</td>
+            <td><strong>${metric.value}</strong></td>
+            <td><span class="badge bg-${badgeColor}">${metric.status}</span></td>
+        </tr>`;
+    });
+    $('#performanceMetrics').html(html);
+}
+
+function updateRecentErrors(errors) {
+    if (!errors || errors.length === 0) {
+        $('#recentErrorsTable').html('<tr><td colspan="5" class="text-center text-muted">No recent errors</td></tr>');
+        return;
+    }
+
+    const severityColors = {
+        'error': 'danger',
+        'warning': 'warning',
+        'info': 'info'
+    };
+
+    let html = '';
+    errors.forEach(function(error) {
+        const badgeColor = severityColors[error.severity] || 'secondary';
+        html += `<tr>
+            <td>${error.time}</td>
+            <td><span class="badge bg-${badgeColor}">${error.severity}</span></td>
+            <td>${error.component}</td>
+            <td>${error.message}</td>
+            <td>${error.user || '-'}</td>
+        </tr>`;
+    });
+    $('#recentErrorsTable').html(html);
+}
+
+function updateSystemMetrics(metrics) {
+    // Update system info
+    $('#osInfo').text(metrics.os || 'Unknown');
+    $('#pythonVersion').text(metrics.python_version || 'Unknown');
+    $('#architecture').text(metrics.architecture || 'Unknown');
+    $('#hostname').text(metrics.hostname || 'Unknown');
+    $('#cpuCores').text(metrics.cpu_cores || 'N/A');
+
+    // Update CPU gauge
+    const cpuPercent = metrics.cpu_percent || 0;
+    $('#cpuValue').text(cpuPercent.toFixed(1) + '%');
+    updateGauge('cpuGauge', cpuPercent, cpuGauge);
+    cpuGauge = createGauge('cpuGauge', cpuPercent);
+
+    // Update Memory gauge
+    const memoryPercent = metrics.memory_percent || 0;
+    $('#memoryValue').text(memoryPercent.toFixed(1) + '%');
+    $('#memoryUsed').text(metrics.memory_used || 'N/A');
+    $('#memoryTotal').text(metrics.memory_total || 'N/A');
+    updateGauge('memoryGauge', memoryPercent, memoryGauge);
+    memoryGauge = createGauge('memoryGauge', memoryPercent);
+
+    // Update Disk gauge
+    const diskPercent = metrics.disk_percent || 0;
+    $('#diskValue').text(diskPercent.toFixed(1) + '%');
+    $('#diskFree').text(metrics.disk_free || 'N/A');
+    $('#diskTotal').text(metrics.disk_total || 'N/A');
+    updateGauge('diskGauge', diskPercent, diskGauge);
+    diskGauge = createGauge('diskGauge', diskPercent);
+}
+
+function createGauge(canvasId, percentage) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = 45;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Determine color based on percentage
+    let color;
+    if (percentage < 60) {
+        color = '#28a745'; // green
+    } else if (percentage < 80) {
+        color = '#ffc107'; // yellow
+    } else {
+        color = '#dc3545'; // red
+    }
+    
+    // Draw background circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.strokeStyle = '#e9ecef';
+    ctx.lineWidth = 10;
+    ctx.stroke();
+    
+    // Draw percentage arc
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + (2 * Math.PI * percentage / 100);
+    
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    
+    return ctx;
+}
+
+function updateGauge(canvasId, percentage, existingGauge) {
+    if (existingGauge) {
+        createGauge(canvasId, percentage);
+    }
+}
+
+// Wait for DOM ready
+$(document).ready(function() {
+    console.log('System health monitoring page ready');
+    loadSystemHealth();
+
+    // Auto-refresh every 30 seconds
+    setInterval(loadSystemHealth, 30000);
+});
+</script>
+{% endblock %}

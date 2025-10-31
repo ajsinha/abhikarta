@@ -66,6 +66,13 @@ class MonitoringRoutes:
             user = self.user_registry.get_user(session['user_id'])
             return render_template('monitoring_planner.html', user=user)
 
+        @self.app.route('/monitoring/health')
+        @self.login_required
+        def monitoring_health():
+            """System health monitoring page"""
+            user = self.user_registry.get_user(session['user_id'])
+            return render_template('monitoring_health.html', user=user)
+
         # ============== MONITORING API ENDPOINTS ==============
 
         @self.app.route('/api/monitoring/dashboard')
@@ -142,6 +149,19 @@ class MonitoringRoutes:
             try:
                 monitoring = MonitoringService()
                 stats = monitoring.get_planner_stats()
+                return jsonify(stats)
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+
+        @self.app.route('/api/monitoring/health')
+        @self.login_required
+        def api_monitoring_health():
+            """API endpoint for system health monitoring statistics"""
+            from monitoring.monitoring_service import MonitoringService
+
+            try:
+                monitoring = MonitoringService()
+                stats = monitoring.get_system_health_stats()
                 return jsonify(stats)
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
