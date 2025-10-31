@@ -1,1440 +1,393 @@
 """
-Database Call Handler
-Centralized database operations layer for workflows, events, and statistics
+Unified Database Handler
+Delegates to specialized handlers for different database operations
+Maintains backward compatibility with DatabaseCallHandler interface
 
 © 2025-2030 Ashutosh Sinha, ajsinha@gmail.com, https://www.github.com/ajsinha/abhikarta
 """
 
 from typing import List, Dict, Any, Optional
-from datetime import datetime
 from db.database import get_db
+from db.database_handler_base import DatabaseHandlerBase
+from db.database_handler_workflow import WorkflowHandler
+from db.database_handler_user import UserHandler
+from db.database_handler_agent import AgentHandler
+from db.database_handler_tool import ToolHandler
+from db.database_handler_dag import DAGHandler
+from db.database_handler_hitl import HITLHandler
+from db.database_handler_planner import PlannerHandler
+from db.database_handler_monitoring import MonitoringHandler
 
 
-class DatabaseCallHandler:
-    """Centralized handler for all database operations"""
+class DatabaseCallHandler(DatabaseHandlerBase):
+    """
+    Unified database handler that delegates to specialized handlers
+    Maintains backward compatibility with the original DatabaseCallHandler
+    """
     
     def __init__(self, database):
         """
-        Initialize the handler with a database instance
+        Initialize the unified handler with all specialized handlers
         
         Args:
             database: Database instance from database.py
         """
-        self.db = database
+        super().__init__(database)
+        
+        # Initialize all specialized handlers
+        self.workflow = WorkflowHandler(database)
+        self.user = UserHandler(database)
+        self.agent = AgentHandler(database)
+        self.tool = ToolHandler(database)
+        self.dag = DAGHandler(database)
+        self.hitl = HITLHandler(database)
+        self.planner = PlannerHandler(database)
+        self.monitoring = MonitoringHandler(
+            database, 
+            self.workflow, 
+            self.user, 
+            self.agent, 
+            self.tool, 
+            self.dag, 
+            self.planner, 
+            self.hitl
+        )
     
-    # ==================== Workflow Operations ====================
+    # ==================== Workflow Operations (Delegate to WorkflowHandler) ====================
     
     def get_all_workflows(self, limit: Optional[int] = None, order_by: str = 'created_at DESC') -> List[Dict[str, Any]]:
-        """
-        Get all workflows with optional limit and ordering
-        
-        Args:
-            limit: Maximum number of workflows to return
-            order_by: SQL ORDER BY clause (default: 'created_at DESC')
-            
-        Returns:
-            List of workflow dictionaries
-        """
-        query = f"SELECT * FROM workflows ORDER BY {order_by}"
-        if limit:
-            query += f" LIMIT {limit}"
-        return self.db.fetchall(query)
+        """Get all workflows with optional limit and ordering"""
+        return self.workflow.get_all_workflows(limit, order_by)
     
     def get_workflow_by_id(self, workflow_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific workflow by ID
-        
-        Args:
-            workflow_id: Workflow identifier
-            
-        Returns:
-            Workflow dictionary or None if not found
-        """
-        return self.db.fetchone(
-            "SELECT * FROM workflows WHERE workflow_id = ?",
-            (workflow_id,)
-        )
+        """Get a specific workflow by ID"""
+        return self.workflow.get_workflow_by_id(workflow_id)
     
     def get_workflows_by_status(self, status: str) -> List[Dict[str, Any]]:
-        """
-        Get workflows filtered by status
-        
-        Args:
-            status: Workflow status (e.g., 'running', 'completed', 'failed')
-            
-        Returns:
-            List of workflow dictionaries
-        """
-        return self.db.fetchall(
-            "SELECT * FROM workflows WHERE status = ? ORDER BY created_at DESC",
-            (status,)
-        )
+        """Get workflows filtered by status"""
+        return self.workflow.get_workflows_by_status(status)
     
     def get_recent_workflows(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get most recent workflows
-        
-        Args:
-            limit: Number of recent workflows to return (default: 10)
-            
-        Returns:
-            List of workflow dictionaries
-        """
-        return self.get_all_workflows(limit=limit, order_by='created_at DESC')
+        """Get most recent workflows"""
+        return self.workflow.get_recent_workflows(limit)
     
     def create_workflow(self, workflow_data: Dict[str, Any]) -> int:
-        """
-        Create a new workflow
-        
-        Args:
-            workflow_data: Dictionary containing workflow fields
-            
-        Returns:
-            Last row ID of inserted workflow
-        """
-        return self.db.insert('workflows', workflow_data)
+        """Create a new workflow"""
+        return self.workflow.create_workflow(workflow_data)
     
     def update_workflow(self, workflow_id: str, update_data: Dict[str, Any]) -> int:
-        """
-        Update workflow data
-        
-        Args:
-            workflow_id: Workflow identifier
-            update_data: Dictionary of fields to update
-            
-        Returns:
-            Number of rows affected
-        """
-        return self.db.update(
-            'workflows',
-            update_data,
-            'workflow_id = ?',
-            (workflow_id,)
-        )
+        """Update workflow data"""
+        return self.workflow.update_workflow(workflow_id, update_data)
     
     def delete_workflow(self, workflow_id: str) -> int:
-        """
-        Delete a workflow
-        
-        Args:
-            workflow_id: Workflow identifier
-            
-        Returns:
-            Number of rows affected
-        """
-        return self.db.delete('workflows', 'workflow_id = ?', (workflow_id,))
-    
-    # ==================== Workflow Statistics ====================
+        """Delete a workflow"""
+        return self.workflow.delete_workflow(workflow_id)
     
     def get_workflow_count(self, status: Optional[str] = None) -> int:
-        """
-        Get count of workflows, optionally filtered by status
-        
-        Args:
-            status: Optional status filter
-            
-        Returns:
-            Count of workflows
-        """
-        if status:
-            result = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM workflows WHERE status = ?",
-                (status,)
-            )
-        else:
-            result = self.db.fetchone("SELECT COUNT(*) as count FROM workflows")
-        
-        return result['count'] if result else 0
+        """Get count of workflows, optionally filtered by status"""
+        return self.workflow.get_workflow_count(status)
     
     def get_workflow_statistics(self) -> Dict[str, int]:
-        """
-        Get comprehensive workflow statistics
-        
-        Returns:
-            Dictionary with total, running, completed, and failed counts
-        """
-        return {
-            'total': self.get_workflow_count(),
-            'running': self.get_workflow_count('running'),
-            'completed': self.get_workflow_count('completed'),
-            'failed': self.get_workflow_count('failed'),
-            'pending': self.get_workflow_count('pending')
-        }
+        """Get comprehensive workflow statistics"""
+        return self.workflow.get_workflow_statistics()
     
-    # ==================== Workflow Events ====================
+    def count_workflows_by_time(self, start_time: str) -> int:
+        """Count workflows created since a given time"""
+        return self.workflow.count_workflows_by_time(start_time)
+    
+    def get_workflow_success_stats(self, start_time: str) -> Dict[str, int]:
+        """Get success statistics for workflows"""
+        return self.workflow.get_workflow_success_stats(start_time)
+    
+    def count_workflows_in_time_range(self, start_time: str, end_time: str) -> int:
+        """Count workflows within a time range"""
+        return self.workflow.count_workflows_in_time_range(start_time, end_time)
+    
+    def count_workflows_started_in_time_range(self, start_time: str, end_time: str) -> int:
+        """Count workflows started within a time range"""
+        return self.workflow.count_workflows_started_in_time_range(start_time, end_time)
+    
+    def count_workflows_completed_in_time_range(self, start_time: str, end_time: str) -> int:
+        """Count workflows completed within a time range"""
+        return self.workflow.count_workflows_completed_in_time_range(start_time, end_time)
     
     def get_workflow_events(self, workflow_id: str, order_by: str = 'created_at DESC') -> List[Dict[str, Any]]:
-        """
-        Get all events for a specific workflow
-        
-        Args:
-            workflow_id: Workflow identifier
-            order_by: SQL ORDER BY clause (default: 'created_at DESC')
-            
-        Returns:
-            List of event dictionaries
-        """
-        return self.db.fetchall(
-            f"SELECT * FROM workflow_events WHERE workflow_id = ? ORDER BY {order_by}",
-            (workflow_id,)
-        )
+        """Get all events for a specific workflow"""
+        return self.workflow.get_workflow_events(workflow_id, order_by)
     
     def create_workflow_event(self, event_data: Dict[str, Any]) -> int:
-        """
-        Create a new workflow event
-        
-        Args:
-            event_data: Dictionary containing event fields
-            
-        Returns:
-            Last row ID of inserted event
-        """
-        return self.db.insert('workflow_events', event_data)
+        """Create a new workflow event"""
+        return self.workflow.create_workflow_event(event_data)
     
     def get_events_by_type(self, workflow_id: str, event_type: str) -> List[Dict[str, Any]]:
-        """
-        Get workflow events filtered by type
-        
-        Args:
-            workflow_id: Workflow identifier
-            event_type: Type of event to filter
-            
-        Returns:
-            List of event dictionaries
-        """
-        return self.db.fetchall(
-            "SELECT * FROM workflow_events WHERE workflow_id = ? AND event_type = ? ORDER BY created_at DESC",
-            (workflow_id, event_type)
-        )
-    
-    # ==================== Workflow Nodes ====================
+        """Get workflow events filtered by type"""
+        return self.workflow.get_events_by_type(workflow_id, event_type)
     
     def get_workflow_nodes(self, workflow_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all nodes for a specific workflow
-        
-        Args:
-            workflow_id: Workflow identifier
-            
-        Returns:
-            List of node dictionaries
-        """
-        return self.db.fetchall(
-            "SELECT * FROM workflow_nodes WHERE workflow_id = ?",
-            (workflow_id,)
-        )
+        """Get all nodes for a specific workflow"""
+        return self.workflow.get_workflow_nodes(workflow_id)
     
     def get_node_by_id(self, workflow_id: str, node_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific workflow node
-        
-        Args:
-            workflow_id: Workflow identifier
-            node_id: Node identifier
-            
-        Returns:
-            Node dictionary or None if not found
-        """
-        return self.db.fetchone(
-            "SELECT * FROM workflow_nodes WHERE workflow_id = ? AND node_id = ?",
-            (workflow_id, node_id)
-        )
+        """Get a specific workflow node"""
+        return self.workflow.get_node_by_id(workflow_id, node_id)
     
     def create_workflow_node(self, node_data: Dict[str, Any]) -> int:
-        """
-        Create a new workflow node
-        
-        Args:
-            node_data: Dictionary containing node fields
-            
-        Returns:
-            Last row ID of inserted node
-        """
-        return self.db.insert('workflow_nodes', node_data)
+        """Create a new workflow node"""
+        return self.workflow.create_workflow_node(node_data)
     
     def update_workflow_node(self, workflow_id: str, node_id: str, update_data: Dict[str, Any]) -> int:
-        """
-        Update workflow node data
-        
-        Args:
-            workflow_id: Workflow identifier
-            node_id: Node identifier
-            update_data: Dictionary of fields to update
-            
-        Returns:
-            Number of rows affected
-        """
-        return self.db.update(
-            'workflow_nodes',
-            update_data,
-            'workflow_id = ? AND node_id = ?',
-            (workflow_id, node_id)
-        )
+        """Update workflow node data"""
+        return self.workflow.update_workflow_node(workflow_id, node_id, update_data)
     
-    # ==================== HITL Requests ====================
-    
-    def get_hitl_requests(self, workflow_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all HITL requests for a specific workflow
-        
-        Args:
-            workflow_id: Workflow identifier
-            
-        Returns:
-            List of HITL request dictionaries
-        """
-        return self.db.fetchall(
-            "SELECT * FROM hitl_requests WHERE workflow_id = ?",
-            (workflow_id,)
-        )
-    
-    def get_pending_hitl_requests(self) -> List[Dict[str, Any]]:
-        """
-        Get all pending HITL requests across all workflows
-        
-        Returns:
-            List of pending HITL request dictionaries
-        """
-        return self.db.fetchall(
-            "SELECT * FROM hitl_requests WHERE status = 'pending' ORDER BY created_at ASC"
-        )
-    
-    def get_hitl_request_by_id(self, request_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific HITL request
-        
-        Args:
-            request_id: HITL request identifier
-            
-        Returns:
-            HITL request dictionary or None if not found
-        """
-        return self.db.fetchone(
-            "SELECT * FROM hitl_requests WHERE request_id = ?",
-            (request_id,)
-        )
-    
-    def create_hitl_request(self, request_data: Dict[str, Any]) -> int:
-        """
-        Create a new HITL request
-        
-        Args:
-            request_data: Dictionary containing HITL request fields
-            
-        Returns:
-            Last row ID of inserted request
-        """
-        return self.db.insert('hitl_requests', request_data)
-    
-    def update_hitl_request(self, request_id: str, update_data: Dict[str, Any]) -> int:
-        """
-        Update HITL request data
-        
-        Args:
-            request_id: HITL request identifier
-            update_data: Dictionary of fields to update
-            
-        Returns:
-            Number of rows affected
-        """
-        return self.db.update(
-            'hitl_requests',
-            update_data,
-            'request_id = ?',
-            (request_id,)
-        )
-    
-    # ==================== Agent Executions ====================
-    
-    def get_agent_executions(self, workflow_id: Optional[str] = None, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """
-        Get agent executions, optionally filtered by workflow or agent
-        
-        Args:
-            workflow_id: Optional workflow identifier filter
-            agent_id: Optional agent identifier filter
-            
-        Returns:
-            List of agent execution dictionaries
-        """
-        if workflow_id and agent_id:
-            return self.db.fetchall(
-                "SELECT * FROM agent_executions WHERE workflow_id = ? AND agent_id = ? ORDER BY started_at DESC",
-                (workflow_id, agent_id)
-            )
-        elif workflow_id:
-            return self.db.fetchall(
-                "SELECT * FROM agent_executions WHERE workflow_id = ? ORDER BY started_at DESC",
-                (workflow_id,)
-            )
-        elif agent_id:
-            return self.db.fetchall(
-                "SELECT * FROM agent_executions WHERE agent_id = ? ORDER BY started_at DESC",
-                (agent_id,)
-            )
-        else:
-            return self.db.fetchall(
-                "SELECT * FROM agent_executions ORDER BY started_at DESC"
-            )
-    
-    def get_agent_execution_by_id(self, execution_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific agent execution
-        
-        Args:
-            execution_id: Execution identifier
-            
-        Returns:
-            Agent execution dictionary or None if not found
-        """
-        return self.db.fetchone(
-            "SELECT * FROM agent_executions WHERE execution_id = ?",
-            (execution_id,)
-        )
-    
-    def create_agent_execution(self, execution_data: Dict[str, Any]) -> int:
-        """
-        Create a new agent execution record
-        
-        Args:
-            execution_data: Dictionary containing execution fields
-            
-        Returns:
-            Last row ID of inserted execution
-        """
-        return self.db.insert('agent_executions', execution_data)
-    
-    def update_agent_execution(self, execution_id: str, update_data: Dict[str, Any]) -> int:
-        """
-        Update agent execution data
-        
-        Args:
-            execution_id: Execution identifier
-            update_data: Dictionary of fields to update
-            
-        Returns:
-            Number of rows affected
-        """
-        return self.db.update(
-            'agent_executions',
-            update_data,
-            'execution_id = ?',
-            (execution_id,)
-        )
-    
-    # ==================== Sessions ====================
-    
-    def get_session_by_id(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific session
-        
-        Args:
-            session_id: Session identifier
-            
-        Returns:
-            Session dictionary or None if not found
-        """
-        return self.db.fetchone(
-            "SELECT * FROM sessions WHERE session_id = ?",
-            (session_id,)
-        )
-    
-    def get_user_sessions(self, user_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
-        """
-        Get sessions for a specific user
-        
-        Args:
-            user_id: User identifier
-            status: Optional status filter
-            
-        Returns:
-            List of session dictionaries
-        """
-        if status:
-            return self.db.fetchall(
-                "SELECT * FROM sessions WHERE user_id = ? AND status = ? ORDER BY updated_at DESC",
-                (user_id, status)
-            )
-        else:
-            return self.db.fetchall(
-                "SELECT * FROM sessions WHERE user_id = ? ORDER BY updated_at DESC",
-                (user_id,)
-            )
-    
-    def create_session(self, session_data: Dict[str, Any]) -> int:
-        """
-        Create a new session
-        
-        Args:
-            session_data: Dictionary containing session fields
-            
-        Returns:
-            Last row ID of inserted session
-        """
-        return self.db.insert('sessions', session_data)
-    
-    def update_session(self, session_id: str, update_data: Dict[str, Any]) -> int:
-        """
-        Update session data
-        
-        Args:
-            session_id: Session identifier
-            update_data: Dictionary of fields to update
-            
-        Returns:
-            Number of rows affected
-        """
-        return self.db.update(
-            'sessions',
-            update_data,
-            'session_id = ?',
-            (session_id,)
-        )
-    
-    # ==================== Users ====================
+    # ==================== User Operations (Delegate to UserHandler) ====================
     
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific user
-        
-        Args:
-            user_id: User identifier
-            
-        Returns:
-            User dictionary or None if not found
-        """
-        return self.db.fetchone(
-            "SELECT * FROM users WHERE user_id = ?",
-            (user_id,)
-        )
+        """Get a specific user"""
+        return self.user.get_user_by_id(user_id)
     
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a user by username
-        
-        Args:
-            username: Username
-            
-        Returns:
-            User dictionary or None if not found
-        """
-        return self.db.fetchone(
-            "SELECT * FROM users WHERE username = ?",
-            (username,)
-        )
+        """Get a user by username"""
+        return self.user.get_user_by_username(username)
     
     def create_user(self, user_data: Dict[str, Any]) -> int:
-        """
-        Create a new user
-        
-        Args:
-            user_data: Dictionary containing user fields
-            
-        Returns:
-            Last row ID of inserted user
-        """
-        return self.db.insert('users', user_data)
+        """Create a new user"""
+        return self.user.create_user(user_data)
     
     def update_user(self, user_id: str, update_data: Dict[str, Any]) -> int:
-        """
-        Update user data
-        
-        Args:
-            user_id: User identifier
-            update_data: Dictionary of fields to update
-            
-        Returns:
-            Number of rows affected
-        """
-        return self.db.update(
-            'users',
-            update_data,
-            'user_id = ?',
-            (user_id,)
-        )
-
-    # ==================== Monitoring Queries ====================
-
-    # User Monitoring
-    def count_distinct_users_in_sessions(self, start_time: str) -> int:
-        """
-        Count distinct users in sessions since a given time
-
-        Args:
-            start_time: ISO format timestamp
-
-        Returns:
-            Count of distinct users
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(DISTINCT user_id) as count FROM sessions WHERE created_at >= ?",
-            (start_time,)
-        )
-        return result['count'] if result else 0
-
+        """Update user data"""
+        return self.user.update_user(user_id, update_data)
+    
     def count_total_users(self) -> int:
-        """
-        Get total count of users
-
-        Returns:
-            Total number of users
-        """
-        result = self.db.fetchone("SELECT COUNT(*) as count FROM users")
-        return result['count'] if result else 0
-
-    def count_sessions_in_time_range(self, start_time: str, end_time: str) -> int:
-        """
-        Count sessions created within a time range
-
-        Args:
-            start_time: ISO format timestamp
-            end_time: ISO format timestamp
-
-        Returns:
-            Count of sessions
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM sessions WHERE created_at >= ? AND created_at < ?",
-            (start_time, end_time)
-        )
-        return result['count'] if result else 0
-
-    def get_active_sessions_with_users(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get active sessions with user information
-
-        Args:
-            limit: Maximum number of sessions to return
-
-        Returns:
-            List of session dictionaries with username
-        """
-        return self.db.fetchall("""
-            SELECT s.*, u.username 
-            FROM sessions s
-            JOIN users u ON s.user_id = u.user_id
-            WHERE s.status = 'active'
-            ORDER BY s.updated_at DESC
-            LIMIT ?
-        """, (limit,))
-
+        """Get total count of users"""
+        return self.user.count_total_users()
+    
+    def count_distinct_users_in_sessions(self, start_time: str) -> int:
+        """Count distinct users in sessions since a given time"""
+        return self.user.count_distinct_users_in_sessions(start_time)
+    
     def get_user_statistics(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get user statistics with session and workflow counts
-
-        Args:
-            limit: Maximum number of users to return
-
-        Returns:
-            List of user statistics dictionaries
-        """
-        return self.db.fetchall("""
-            SELECT 
-                u.username,
-                u.role,
-                u.last_login,
-                (SELECT COUNT(*) FROM sessions WHERE user_id = u.user_id) as session_count,
-                (SELECT COUNT(*) FROM workflows WHERE created_by = u.user_id) as workflow_count
-            FROM users u
-            ORDER BY workflow_count DESC
-            LIMIT ?
-        """, (limit,))
-
-    # Tools Monitoring
-    def count_tool_nodes(self, start_time: Optional[str] = None) -> int:
-        """
-        Count tool executions, optionally since a given time
-
-        Args:
-            start_time: Optional ISO format timestamp
-
-        Returns:
-            Count of tool nodes
-        """
-        if start_time:
-            result = self.db.fetchone("""
-                SELECT COUNT(*) as count FROM workflow_nodes 
-                WHERE node_type = 'tool' AND started_at >= ?
-            """, (start_time,))
-        else:
-            result = self.db.fetchone("""
-                SELECT COUNT(*) as count FROM workflow_nodes 
-                WHERE node_type = 'tool'
-            """)
-        return result['count'] if result else 0
-
-    def get_tool_success_stats(self, start_time: str) -> Dict[str, int]:
-        """
-        Get success statistics for tool executions
-
-        Args:
-            start_time: ISO format timestamp
-
-        Returns:
-            Dictionary with total and success counts
-        """
-        result = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as success
-            FROM workflow_nodes
-            WHERE node_type = 'tool' AND started_at >= ?
-        """, (start_time,))
-
-        if result:
-            return {
-                'total': result['total'] or 0,
-                'success': result['success'] or 0
-            }
-        return {'total': 0, 'success': 0}
-
-    def count_tool_nodes_in_time_range(self, start_time: str, end_time: str) -> int:
-        """
-        Count tool nodes within a time range
-
-        Args:
-            start_time: ISO format timestamp
-            end_time: ISO format timestamp
-
-        Returns:
-            Count of tool nodes
-        """
-        result = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'tool' AND started_at >= ? AND started_at < ?
-        """, (start_time, end_time))
-        return result['count'] if result else 0
-
-    # Agent Monitoring
-    def count_agent_nodes(self, start_time: Optional[str] = None) -> int:
-        """
-        Count agent executions, optionally since a given time
-
-        Args:
-            start_time: Optional ISO format timestamp
-
-        Returns:
-            Count of agent nodes
-        """
-        if start_time:
-            result = self.db.fetchone("""
-                SELECT COUNT(*) as count FROM workflow_nodes 
-                WHERE node_type = 'agent' AND started_at >= ?
-            """, (start_time,))
-        else:
-            result = self.db.fetchone("""
-                SELECT COUNT(*) as count FROM workflow_nodes 
-                WHERE node_type = 'agent'
-            """)
-        return result['count'] if result else 0
-
-    def get_agent_success_stats(self, start_time: str) -> Dict[str, int]:
-        """
-        Get success statistics for agent executions
-
-        Args:
-            start_time: ISO format timestamp
-
-        Returns:
-            Dictionary with total and success counts
-        """
-        result = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as success
-            FROM workflow_nodes
-            WHERE node_type = 'agent' AND started_at >= ?
-        """, (start_time,))
-
-        if result:
-            return {
-                'total': result['total'] or 0,
-                'success': result['success'] or 0
-            }
-        return {'total': 0, 'success': 0}
-
-    def count_agent_nodes_in_time_range(self, start_time: str, end_time: str) -> int:
-        """
-        Count agent nodes within a time range
-
-        Args:
-            start_time: ISO format timestamp
-            end_time: ISO format timestamp
-
-        Returns:
-            Count of agent nodes
-        """
-        result = self.db.fetchone("""
-            SELECT COUNT(*) as count FROM workflow_nodes 
-            WHERE node_type = 'agent' AND started_at >= ? AND started_at < ?
-        """, (start_time, end_time))
-        return result['count'] if result else 0
-
-    def get_agent_statistics(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get agent statistics with execution counts
-
-        Args:
-            limit: Maximum number of agents to return
-
-        Returns:
-            List of agent statistics dictionaries
-        """
-        return self.db.fetchall("""
-            SELECT 
-                node_id as agent_id,
-                COUNT(*) as total_executions,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-            FROM workflow_nodes
-            WHERE node_type = 'agent'
-            GROUP BY node_id
-            ORDER BY total_executions DESC
-            LIMIT ?
-        """, (limit,))
-
-
-
-    # Workflow Monitoring
-    def count_workflows_by_time(self, start_time: str) -> int:
-        """
-        Count workflows created since a given time
-
-        Args:
-            start_time: ISO format timestamp
-
-        Returns:
-            Count of workflows
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows WHERE created_at >= ?",
-            (start_time,)
-        )
-        return result['count'] if result else 0
-
-    def get_workflow_success_stats(self, start_time: str) -> Dict[str, int]:
-        """
-        Get success statistics for workflows
-
-        Args:
-            start_time: ISO format timestamp
-
-        Returns:
-            Dictionary with total, completed, and started counts
-        """
-        result = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as started
-            FROM workflows
-            WHERE created_at >= ?
-        """, (start_time,))
-
-        if result:
-            return {
-                'total': result['total'] or 0,
-                'completed': result['completed'] or 0,
-                'started': result['started'] or 0
-            }
-        return {'total': 0, 'completed': 0, 'started': 0}
-
-    def count_workflows_in_time_range(self, start_time: str, end_time: str) -> int:
-        """
-        Count workflows within a time range
-
-        Args:
-            start_time: ISO format timestamp
-            end_time: ISO format timestamp
-
-        Returns:
-            Count of workflows
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows WHERE created_at >= ? AND created_at < ?",
-            (start_time, end_time)
-        )
-        return result['count'] if result else 0
-
-    def get_dag_statistics(self) -> List[Dict[str, Any]]:
-        """
-        Get per-DAG statistics
-
-        Returns:
-            List of DAG statistics dictionaries
-        """
-        return self.db.fetchall("""
-            SELECT 
-                dag_id,
-                name,
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-                SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running
-            FROM workflows
-            GROUP BY dag_id, name
-            ORDER BY total DESC
-        """)
-
-    def count_workflows_started_in_time_range(self, start_time: str, end_time: str) -> int:
-        """
-        Count workflows started within a time range
-
-        Args:
-            start_time: ISO format timestamp
-            end_time: ISO format timestamp
-
-        Returns:
-            Count of workflows started
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows WHERE started_at >= ? AND started_at < ?",
-            (start_time, end_time)
-        )
-        return result['count'] if result else 0
-
-    def count_workflows_completed_in_time_range(self, start_time: str, end_time: str) -> int:
-        """
-        Count workflows completed within a time range
-
-        Args:
-            start_time: ISO format timestamp
-            end_time: ISO format timestamp
-
-        Returns:
-            Count of workflows completed
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM workflows WHERE completed_at >= ? AND completed_at < ?",
-            (start_time, end_time)
-        )
-        return result['count'] if result else 0
-
-    # Planner Monitoring
-    def count_plans(self, start_time: Optional[str] = None) -> int:
-        """
-        Count plans, optionally since a given time
-
-        Args:
-            start_time: Optional ISO format timestamp
-
-        Returns:
-            Count of plans
-        """
-        if start_time:
-            result = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM plans WHERE created_at >= ?",
-                (start_time,)
-            )
-        else:
-            result = self.db.fetchone("SELECT COUNT(*) as count FROM plans")
-        return result['count'] if result else 0
-
-    def get_plan_approval_stats(self, start_time: str) -> Dict[str, int]:
-        """
-        Get approval statistics for plans
-
-        Args:
-            start_time: ISO format timestamp
-
-        Returns:
-            Dictionary with total and approved counts
-        """
-        result = self.db.fetchone("""
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved
-            FROM plans
-            WHERE created_at >= ?
-        """, (start_time,))
-
-        if result:
-            return {
-                'total': result['total'] or 0,
-                'approved': result['approved'] or 0
-            }
-        return {'total': 0, 'approved': 0}
-
-    def count_planner_conversations(self, start_time: str) -> int:
-        """
-        Count planner conversations since a given time
-
-        Args:
-            start_time: ISO format timestamp
-
-        Returns:
-            Count of conversations
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM planner_conversations WHERE created_at >= ?",
-            (start_time,)
-        )
-        return result['count'] if result else 0
-
-    def count_plans_by_status(self, status: str) -> int:
-        """
-        Count plans with a specific status
-
-        Args:
-            status: Plan status
-
-        Returns:
-            Count of plans
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM plans WHERE status = ?",
-            (status,)
-        )
-        return result['count'] if result else 0
-
-    def count_plans_in_time_range(self, start_time: str, end_time: str) -> int:
-        """
-        Count plans within a time range
-
-        Args:
-            start_time: ISO format timestamp
-            end_time: ISO format timestamp
-
-        Returns:
-            Count of plans
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM plans WHERE created_at >= ? AND created_at < ?",
-            (start_time, end_time)
-        )
-        return result['count'] if result else 0
-
-    def count_planner_conversations_in_time_range(self, start_time: str, end_time: str) -> int:
-        """
-        Count planner conversations within a time range
-
-        Args:
-            start_time: ISO format timestamp
-            end_time: ISO format timestamp
-
-        Returns:
-            Count of conversations
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM planner_conversations WHERE created_at >= ? AND created_at < ?",
-            (start_time, end_time)
-        )
-        return result['count'] if result else 0
-
-    def get_plan_status_distribution(self) -> Dict[str, int]:
-        """
-        Get distribution of plans by status
-
-        Returns:
-            Dictionary with counts for each status
-        """
-        return {
-            'pending_approval': self.count_plans_by_status('pending_approval'),
-            'approved': self.count_plans_by_status('approved'),
-            'rejected': self.count_plans_by_status('rejected'),
-            'executed': self.count_plans_by_status('executed')
-        }
-
-    def get_top_plan_users(self, limit: int = 5) -> List[Dict[str, Any]]:
-        """
-        Get top users by plan count
-
-        Args:
-            limit: Maximum number of users to return
-
-        Returns:
-            List of user statistics dictionaries
-        """
-        return self.db.fetchall("""
-            SELECT 
-                u.username,
-                (SELECT COUNT(*) FROM plans WHERE user_id = u.user_id) as plan_count,
-                0 as conversation_count
-            FROM users u
-            WHERE (SELECT COUNT(*) FROM plans WHERE user_id = u.user_id) > 0
-            ORDER BY plan_count DESC
-            LIMIT ?
-        """, (limit,))
-
-    def get_recent_plans_with_users(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get recent plans with user information
-
-        Args:
-            limit: Maximum number of plans to return
-
-        Returns:
-            List of plan dictionaries with username
-        """
-        return self.db.fetchall("""
-            SELECT p.*, u.username
-            FROM plans p
-            JOIN users u ON p.user_id = u.user_id
-            ORDER BY p.created_at DESC
-            LIMIT ?
-        """, (limit,))
-
-    # Dashboard Monitoring
+        """Get user statistics with session and workflow counts"""
+        return self.user.get_user_statistics(limit)
+    
     def count_active_users_in_last_24h(self, time_24h_ago: str) -> int:
-        """
-        Count active users in the last 24 hours
-
-        Args:
-            time_24h_ago: ISO format timestamp for 24 hours ago
-
-        Returns:
-            Count of distinct active users
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(DISTINCT user_id) as count FROM sessions WHERE updated_at >= ?",
-            (time_24h_ago,)
-        )
-        return result['count'] if result else 0
-
-    def count_pending_hitl_requests(self) -> int:
-        """
-        Count pending HITL requests
-
-        Returns:
-            Count of pending requests
-        """
-        result = self.db.fetchone(
-            "SELECT COUNT(*) as count FROM hitl_requests WHERE status = 'pending'"
-        )
-        return result['count'] if result else 0
-
-    def get_recent_activity(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get recent workflow activity
-
-        Args:
-            limit: Maximum number of activities to return
-
-        Returns:
-            List of activity dictionaries
-        """
-        return self.db.fetchall("""
-            SELECT 
-                'workflow' as type,
-                'primary' as type_color,
-                'Workflow started: ' || COALESCE(name, 'Unnamed') as event,
-                created_by as user,
-                created_at as time
-            FROM workflows
-            ORDER BY created_at DESC
-            LIMIT ?
-        """, (limit,))
-
-    # ==================== LGRAPH PLAN MONITORING METHODS ====================
-
-    def count_lgraph_plans(self, since_time=None):
-        """Count LangGraph autonomous plans, optionally since a time"""
-        try:
-            if not self.table_exists('lgraph_plans'):
-                return 0
-            if since_time:
-                result = self.db.fetchone(
-                    "SELECT COUNT(*) as count FROM lgraph_plans WHERE created_at >= ?",
-                    (since_time,)
-                )
-            else:
-                result = self.db.fetchone("SELECT COUNT(*) as count FROM lgraph_plans")
-            return result['count'] if result else 0
-        except Exception as e:
-            print(f"Error counting lgraph plans: {e}")
-            return 0
-
-    def count_lgraph_plans_by_status(self, status):
-        """Count LangGraph plans by status"""
-        try:
-            if not self.table_exists('lgraph_plans'):
-                return 0
-            result = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM lgraph_plans WHERE status = ?",
-                (status,)
-            )
-            return result['count'] if result else 0
-        except Exception as e:
-            print(f"Error counting lgraph plans by status: {e}")
-            return 0
-
-    def count_lgraph_plans_in_time_range(self, start_time, end_time):
-        """Count LangGraph plans created within a time range"""
-        try:
-            if not self.table_exists('lgraph_plans'):
-                return 0
-            result = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM lgraph_plans WHERE created_at >= ? AND created_at < ?",
-                (start_time, end_time)
-            )
-            return result['count'] if result else 0
-        except Exception as e:
-            print(f"Error counting lgraph plans in time range: {e}")
-            return 0
-
-    def get_lgraph_plan_approval_stats(self, since_time):
-        """Get LangGraph plan approval statistics since a time"""
-        try:
-            if not self.table_exists('lgraph_plans'):
-                return {'total': 0, 'approved': 0, 'rejected': 0}
-
-            result = self.db.fetchone("""
-                SELECT 
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-                    SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
-                FROM lgraph_plans
-                WHERE created_at >= ?
-            """, (since_time,))
-
-            if result:
-                return {
-                    'total': result.get('total', 0) or 0,
-                    'approved': result.get('approved', 0) or 0,
-                    'rejected': result.get('rejected', 0) or 0
-                }
-            return {'total': 0, 'approved': 0, 'rejected': 0}
-        except Exception as e:
-            print(f"Error getting lgraph plan approval stats: {e}")
-            return {'total': 0, 'approved': 0, 'rejected': 0}
-
-    def count_lgraph_conversations(self, since_time=None):
-        """Count LangGraph planner conversations"""
-        try:
-            if not self.table_exists('lgraph_conversations'):
-                return 0
-            if since_time:
-                result = self.db.fetchone(
-                    "SELECT COUNT(*) as count FROM lgraph_conversations WHERE created_at >= ?",
-                    (since_time,)
-                )
-            else:
-                result = self.db.fetchone("SELECT COUNT(*) as count FROM lgraph_conversations")
-            return result['count'] if result else 0
-        except Exception as e:
-            print(f"Error counting lgraph conversations: {e}")
-            return 0
-
-    def count_lgraph_conversations_in_time_range(self, start_time, end_time):
-        """Count LangGraph conversations within a time range"""
-        try:
-            if not self.table_exists('lgraph_conversations'):
-                return 0
-            result = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM lgraph_conversations WHERE created_at >= ? AND created_at < ?",
-                (start_time, end_time)
-            )
-            return result['count'] if result else 0
-        except Exception as e:
-            print(f"Error counting lgraph conversations in time range: {e}")
-            return 0
-
-    def get_lgraph_plan_status_distribution(self):
-        """Get distribution of LangGraph plans by status"""
-        try:
-            if not self.table_exists('lgraph_plans'):
-                return {'pending_approval': 0, 'approved': 0, 'rejected': 0, 'executed': 0}
-
-            results = self.db.fetchall("""
-                SELECT status, COUNT(*) as count
-                FROM lgraph_plans
-                GROUP BY status
-            """)
-
-            distribution = {
-                'pending_approval': 0,
-                'approved': 0,
-                'rejected': 0,
-                'executed': 0
-            }
-
-            if results:
-                for row in results:
-                    status = row.get('status')
-                    count = row.get('count', 0)
-                    if status in distribution:
-                        distribution[status] = count
-
-            return distribution
-        except Exception as e:
-            print(f"Error getting lgraph plan status distribution: {e}")
-            return {'pending_approval': 0, 'approved': 0, 'rejected': 0, 'executed': 0}
-
-    def get_recent_lgraph_plans_with_users(self, limit=10):
-        """Get recent LangGraph plans with user information"""
-        try:
-            if not self.table_exists('lgraph_plans'):
-                return []
-
-            results = self.db.fetchall("""
-                SELECT 
-                    p.plan_id,
-                    p.user_id,
-                    p.user_request as request,
-                    p.status,
-                    p.created_at,
-                    COALESCE(u.username, p.user_id) as username
-                FROM lgraph_plans p
-                LEFT JOIN users u ON p.user_id = u.user_id
-                ORDER BY p.created_at DESC
-                LIMIT ?
-            """, (limit,))
-
-            return results if results else []
-        except Exception as e:
-            print(f"Error getting recent lgraph plans: {e}")
-            return []
-
-    def get_top_plan_users_combined(self, limit=5):
-        """Get top users by plan count (combines regular and LangGraph plans)"""
-        try:
-            if not self.table_exists('users'):
-                return []
-
-            has_plans = self.table_exists('plans')
-            has_lgraph = self.table_exists('lgraph_plans')
-            has_conv = self.table_exists('planner_conversations')
-            has_lgraph_conv = self.table_exists('lgraph_conversations')
-
-            # Build subqueries based on what exists
-            plans_subquery = "(SELECT COUNT(*) FROM plans WHERE user_id = u.user_id)" if has_plans else "0"
-            lgraph_subquery = "(SELECT COUNT(*) FROM lgraph_plans WHERE user_id = u.user_id)" if has_lgraph else "0"
-            conv_subquery = "(SELECT COUNT(*) FROM planner_conversations WHERE user_id = u.user_id)" if has_conv else "0"
-            lgraph_conv_subquery = "(SELECT COUNT(*) FROM lgraph_conversations WHERE user_id = u.user_id)" if has_lgraph_conv else "0"
-
-            query = f"""
-                SELECT 
-                    u.user_id,
-                    u.username,
-                    ({plans_subquery} + {lgraph_subquery}) as plan_count,
-                    ({conv_subquery} + {lgraph_conv_subquery}) as conversation_count
-                FROM users u
-                WHERE ({plans_subquery} + {lgraph_subquery}) > 0
-                ORDER BY plan_count DESC
-                LIMIT ?
-            """
-
-            results = self.db.fetchall(query, (limit,))
-            return results if results else []
-        except Exception as e:
-            print(f"Error getting top plan users: {e}")
-            return []
-
-    # Utility Methods
-    def table_exists(self, table_name: str) -> bool:
-        """
-        Check if a table exists in the database
-
-        Args:
-            table_name: Name of the table to check
-
-        Returns:
-            True if table exists, False otherwise
-        """
-        try:
-            result = self.db.fetchone(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                (table_name,)
-            )
-            return result is not None
-        except:
-            return False
-
-
-    # ==================== Agent Operations ====================
-
+        """Count active users in the last 24 hours"""
+        return self.user.count_active_users_in_last_24h(time_24h_ago)
+    
+    def get_session_by_id(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific session"""
+        return self.user.get_session_by_id(session_id)
+    
+    def get_user_sessions(self, user_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get sessions for a specific user"""
+        return self.user.get_user_sessions(user_id, status)
+    
+    def create_session(self, session_data: Dict[str, Any]) -> int:
+        """Create a new session"""
+        return self.user.create_session(session_data)
+    
+    def update_session(self, session_id: str, update_data: Dict[str, Any]) -> int:
+        """Update session data"""
+        return self.user.update_session(session_id, update_data)
+    
+    def count_sessions_in_time_range(self, start_time: str, end_time: str) -> int:
+        """Count sessions created within a time range"""
+        return self.user.count_sessions_in_time_range(start_time, end_time)
+    
+    def get_active_sessions_with_users(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get active sessions with user information"""
+        return self.user.get_active_sessions_with_users(limit)
+    
+    # ==================== Agent Operations (Delegate to AgentHandler) ====================
+    
     def get_all_agents(self, order_by: str = 'created_at DESC') -> List[Dict[str, Any]]:
         """Get all agents"""
-        query = f"SELECT * FROM agents ORDER BY {order_by}"
-        return self.db.fetchall(query)
-
-
+        return self.agent.get_all_agents(order_by)
+    
     def get_agent_by_id(self, agent_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific agent by ID"""
-        return self.db.fetchone(
-            "SELECT * FROM agents WHERE agent_id = ?",
-            (agent_id,)
-        )
-
-
+        return self.agent.get_agent_by_id(agent_id)
+    
     def create_agent(self, agent_data: Dict[str, Any]) -> int:
         """Create a new agent"""
-        return self.db.insert('agents', agent_data)
-
-
+        return self.agent.create_agent(agent_data)
+    
     def update_agent(self, agent_id: str, update_data: Dict[str, Any]) -> int:
         """Update agent data"""
-        return self.db.update(
-            'agents',
-            update_data,
-            'agent_id = ?',
-            (agent_id,)
-        )
-
-
+        return self.agent.update_agent(agent_id, update_data)
+    
     def delete_agent(self, agent_id: str) -> int:
         """Delete an agent"""
-        return self.db.delete('agents', 'agent_id = ?', (agent_id,))
-
-
+        return self.agent.delete_agent(agent_id)
+    
     def enable_agent(self, agent_id: str) -> bool:
         """Enable an agent"""
-        rows = self.update_agent(agent_id, {'enabled': True})
-        return rows > 0
-
-
+        return self.agent.enable_agent(agent_id)
+    
     def disable_agent(self, agent_id: str) -> bool:
         """Disable an agent"""
-        rows = self.update_agent(agent_id, {'enabled': False})
-        return rows > 0
-
-
-    # ==================== Agent Statistics ====================
-
+        return self.agent.disable_agent(agent_id)
+    
     def count_agents(self, enabled_only: bool = False) -> int:
         """Get count of agents"""
-        if enabled_only:
-            result = self.db.fetchone(
-                "SELECT COUNT(*) as count FROM agents WHERE enabled = 1"
-            )
-        else:
-            result = self.db.fetchone("SELECT COUNT(*) as count FROM agents")
-        return result['count'] if result else 0
-
-
+        return self.agent.count_agents(enabled_only)
+    
     def get_agent_execution_stats(self, agent_id: str, since_time=None):
         """Get execution statistics for an agent"""
-        if since_time:
-            results = self.db.fetchall("""
-                SELECT 
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
-                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-                    AVG(duration) as avg_duration
-                FROM agent_executions
-                WHERE agent_id = ? AND created_at >= ?
-            """, (agent_id, since_time))
-        else:
-            results = self.db.fetchall("""
-                SELECT 
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
-                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-                    AVG(duration) as avg_duration
-                FROM agent_executions
-                WHERE agent_id = ?
-            """, (agent_id,))
-
-        return results[0] if results else {'total': 0, 'success': 0, 'failed': 0, 'avg_duration': 0}
+        return self.agent.get_agent_execution_stats(agent_id, since_time)
+    
+    def count_agent_nodes(self, start_time: Optional[str] = None) -> int:
+        """Count agent executions, optionally since a given time"""
+        return self.agent.count_agent_nodes(start_time)
+    
+    def get_agent_success_stats(self, start_time: str) -> Dict[str, int]:
+        """Get success statistics for agent executions"""
+        return self.agent.get_agent_success_stats(start_time)
+    
+    def count_agent_nodes_in_time_range(self, start_time: str, end_time: str) -> int:
+        """Count agent nodes within a time range"""
+        return self.agent.count_agent_nodes_in_time_range(start_time, end_time)
+    
+    def get_agent_statistics(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get agent statistics with execution counts"""
+        return self.agent.get_agent_statistics(limit)
+    
+    def get_agent_executions(self, workflow_id: Optional[str] = None, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get agent executions, optionally filtered by workflow or agent"""
+        return self.agent.get_agent_executions(workflow_id, agent_id)
+    
+    def get_agent_execution_by_id(self, execution_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific agent execution"""
+        return self.agent.get_agent_execution_by_id(execution_id)
+    
+    def create_agent_execution(self, execution_data: Dict[str, Any]) -> int:
+        """Create a new agent execution record"""
+        return self.agent.create_agent_execution(execution_data)
+    
+    def update_agent_execution(self, execution_id: str, update_data: Dict[str, Any]) -> int:
+        """Update agent execution data"""
+        return self.agent.update_agent_execution(execution_id, update_data)
+    
+    # ==================== Tool Operations (Delegate to ToolHandler) ====================
+    
+    def count_tool_nodes(self, start_time: Optional[str] = None) -> int:
+        """Count tool executions, optionally since a given time"""
+        return self.tool.count_tool_nodes(start_time)
+    
+    def get_tool_success_stats(self, start_time: str) -> Dict[str, int]:
+        """Get success statistics for tool executions"""
+        return self.tool.get_tool_success_stats(start_time)
+    
+    def count_tool_nodes_in_time_range(self, start_time: str, end_time: str) -> int:
+        """Count tool nodes within a time range"""
+        return self.tool.count_tool_nodes_in_time_range(start_time, end_time)
+    
+    # ==================== DAG Operations (Delegate to DAGHandler) ====================
+    
+    def get_dag_statistics(self) -> List[Dict[str, Any]]:
+        """Get per-DAG statistics"""
+        return self.dag.get_dag_statistics()
+    
+    # ==================== HITL Operations (Delegate to HITLHandler) ====================
+    
+    def get_hitl_requests(self, workflow_id: str) -> List[Dict[str, Any]]:
+        """Get all HITL requests for a specific workflow"""
+        return self.hitl.get_hitl_requests(workflow_id)
+    
+    def get_pending_hitl_requests(self) -> List[Dict[str, Any]]:
+        """Get all pending HITL requests across all workflows"""
+        return self.hitl.get_pending_hitl_requests()
+    
+    def get_hitl_request_by_id(self, request_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific HITL request"""
+        return self.hitl.get_hitl_request_by_id(request_id)
+    
+    def create_hitl_request(self, request_data: Dict[str, Any]) -> int:
+        """Create a new HITL request"""
+        return self.hitl.create_hitl_request(request_data)
+    
+    def update_hitl_request(self, request_id: str, update_data: Dict[str, Any]) -> int:
+        """Update HITL request data"""
+        return self.hitl.update_hitl_request(request_id, update_data)
+    
+    def count_pending_hitl_requests(self) -> int:
+        """Count pending HITL requests"""
+        return self.hitl.count_pending_hitl_requests()
+    
+    # ==================== Planner Operations (Delegate to PlannerHandler) ====================
+    
+    def count_plans(self, start_time: Optional[str] = None) -> int:
+        """Count plans, optionally since a given time"""
+        return self.planner.count_plans(start_time)
+    
+    def get_plan_approval_stats(self, start_time: str) -> Dict[str, int]:
+        """Get approval statistics for plans"""
+        return self.planner.get_plan_approval_stats(start_time)
+    
+    def count_planner_conversations(self, start_time: str) -> int:
+        """Count planner conversations since a given time"""
+        return self.planner.count_planner_conversations(start_time)
+    
+    def count_plans_by_status(self, status: str) -> int:
+        """Count plans with a specific status"""
+        return self.planner.count_plans_by_status(status)
+    
+    def count_plans_in_time_range(self, start_time: str, end_time: str) -> int:
+        """Count plans within a time range"""
+        return self.planner.count_plans_in_time_range(start_time, end_time)
+    
+    def count_planner_conversations_in_time_range(self, start_time: str, end_time: str) -> int:
+        """Count planner conversations within a time range"""
+        return self.planner.count_planner_conversations_in_time_range(start_time, end_time)
+    
+    def get_plan_status_distribution(self) -> Dict[str, int]:
+        """Get distribution of plans by status"""
+        return self.planner.get_plan_status_distribution()
+    
+    def get_top_plan_users(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Get top users by plan count"""
+        return self.planner.get_top_plan_users(limit)
+    
+    def get_recent_plans_with_users(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recent plans with user information"""
+        return self.planner.get_recent_plans_with_users(limit)
+    
+    def count_lgraph_plans(self, since_time: Optional[str] = None) -> int:
+        """Count LangGraph plans, optionally since a given time"""
+        return self.planner.count_lgraph_plans(since_time)
+    
+    def count_lgraph_plans_in_time_range(self, start_time, end_time):
+        """Count LangGraph plans within a time range"""
+        return self.planner.count_lgraph_plans_in_time_range(start_time, end_time)
+    
+    def count_lgraph_conversations(self, since_time: Optional[str] = None) -> int:
+        """Count LangGraph conversations, optionally since a given time"""
+        return self.planner.count_lgraph_conversations(since_time)
+    
+    def count_lgraph_conversations_in_time_range(self, start_time, end_time):
+        """Count LangGraph conversations within a time range"""
+        return self.planner.count_lgraph_conversations_in_time_range(start_time, end_time)
+    
+    def get_lgraph_plan_status_distribution(self):
+        """Get distribution of LangGraph plans by status"""
+        return self.planner.get_lgraph_plan_status_distribution()
+    
+    def get_recent_lgraph_plans_with_users(self, limit=10):
+        """Get recent LangGraph plans with user information"""
+        return self.planner.get_recent_lgraph_plans_with_users(limit)
+    
+    def get_top_plan_users_combined(self, limit=5):
+        """Get top users by plan count (combines regular and LangGraph plans)"""
+        return self.planner.get_top_plan_users_combined(limit)
 
 
 # Global database instance
 _handler_instance: Optional[DatabaseCallHandler] = None
 
 def get_database_handler():
+    """Get or create the global database handler instance"""
     global _handler_instance
     if _handler_instance is None:
         # Default to SQLite, can be configured
         _handler_instance = DatabaseCallHandler(get_db())
-
+    
     return _handler_instance
