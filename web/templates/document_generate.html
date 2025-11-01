@@ -159,6 +159,67 @@
     .btn-group .btn:first-child {
         margin-left: 0;
     }
+
+    /* Auto-refresh control bar */
+    .autorefresh-bar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 8px;
+        padding: 10px 20px;
+        color: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .autorefresh-bar label {
+        color: white;
+        font-weight: 500;
+    }
+
+    .autorefresh-bar .form-check-input {
+        width: 3em;
+        height: 1.5em;
+        cursor: pointer;
+    }
+
+    .autorefresh-bar .form-check-input:checked {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+
+    .autorefresh-timer {
+        background: rgba(255,255,255,0.2);
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.95rem;
+    }
+
+    .autorefresh-timer strong {
+        color: #ffd700;
+        font-size: 1.1rem;
+    }
+
+    .autorefresh-settings .form-select {
+        background-color: rgba(255,255,255,0.9);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: #333;
+        font-size: 0.875rem;
+        padding: 4px 8px;
+    }
+
+    /* Pulse animation for auto-refresh */
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+            opacity: 1;
+        }
+        50% {
+            transform: scale(1.05);
+            opacity: 0.8;
+        }
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -167,6 +228,47 @@
     <div class="col">
         <h1><i class="fas fa-file-alt"></i> Document Generation</h1>
         <p class="text-muted">Upload documents, provide instructions, and generate comprehensive reports</p>
+    </div>
+</div>
+
+<!-- Auto-refresh Control Bar -->
+<div class="row mb-2">
+    <div class="col-12">
+        <div class="autorefresh-bar">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <label class="form-check-label me-3 mb-0">
+                        <i class="fas fa-sync-alt"></i> Auto-refresh:
+                    </label>
+                    <div class="form-check form-switch me-4">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="autoRefreshToggle"
+                               onchange="toggleAutoRefresh()">
+                        <label class="form-check-label" for="autoRefreshToggle">
+                            <span id="autoRefreshStatus">Disabled</span>
+                        </label>
+                    </div>
+                    <div class="autorefresh-timer" id="autoRefreshTimer" style="display: none;">
+                        <i class="fas fa-clock"></i>
+                        Next refresh in: <strong><span id="countdownDisplay">30</span>s</strong>
+                    </div>
+                </div>
+                <div class="autorefresh-settings">
+                    <label class="me-2 mb-0 small">Interval:</label>
+                    <select class="form-select form-select-sm"
+                            id="refreshInterval"
+                            style="width: auto; display: inline-block;"
+                            onchange="updateRefreshInterval()">
+                        <option value="10">10 seconds</option>
+                        <option value="30" selected>30 seconds</option>
+                        <option value="60">60 seconds</option>
+                        <option value="120">2 minutes</option>
+                        <option value="300">5 minutes</option>
+                    </select>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -303,6 +405,13 @@
     let uploadedFiles = [];
     let easyMDE = null;
 
+    // Auto-refresh variables
+    let autoRefreshEnabled = false;
+    let autoRefreshInterval = 30; // Default 30 seconds
+    let autoRefreshTimer = null;
+    let countdownTimer = null;
+    let countdownSeconds = 30;
+
     // Initialize Markdown Editor
     document.addEventListener('DOMContentLoaded', function() {
         easyMDE = new EasyMDE({
@@ -415,6 +524,11 @@
             handleFiles(e.target.files);
             // Clear the input so the same file can be selected again
             fileInput.value = '';
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            stopAutoRefresh();
         });
     });
 
@@ -659,20 +773,24 @@
         });
     }
 
-    function refreshContent() {
+    function refreshContent(silent = false) {
         if (!currentSession) {
-            alert('Please create a session first');
+            if (!silent) {
+                alert('Please create a session first');
+            }
             return;
         }
 
         const template = document.getElementById('templateSelect').value;
         const instructions = document.getElementById('instructionsText').value.trim();
 
-        // Show loading
+        // Show loading (skip if silent auto-refresh)
         const refreshBtn = document.getElementById('refreshBtn');
         const originalText = refreshBtn.innerHTML;
-        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
-        refreshBtn.disabled = true;
+        if (!silent) {
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+            refreshBtn.disabled = true;
+        }
 
         $.ajax({
             url: '{{ url_for("generate_document") }}',
@@ -699,18 +817,33 @@
                     document.getElementById('downloadBtn').disabled = false;
                     document.getElementById('rerunBtn').disabled = false;
 
-                    showAlert('success', `Content refreshed from server! Processed ${response.files_processed} file(s).`);
+                    if (!silent) {
+                        showAlert('success', `Content refreshed from server! Processed ${response.files_processed} file(s).`);
+                    } else {
+                        // Add subtle indicator for auto-refresh
+                        const timerDisplay = document.getElementById('autoRefreshTimer');
+                        timerDisplay.style.animation = 'pulse 0.5s ease-in-out';
+                        setTimeout(function() {
+                            timerDisplay.style.animation = '';
+                        }, 500);
+                    }
                 } else {
-                    showAlert('danger', response.error);
+                    if (!silent) {
+                        showAlert('danger', response.error);
+                    }
                 }
-                refreshBtn.innerHTML = originalText;
-                refreshBtn.disabled = false;
+                if (!silent) {
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.disabled = false;
+                }
             },
             error: function(xhr) {
                 const error = xhr.responseJSON?.error || 'Refresh failed';
-                showAlert('danger', error);
-                refreshBtn.innerHTML = originalText;
-                refreshBtn.disabled = false;
+                if (!silent) {
+                    showAlert('danger', error);
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.disabled = false;
+                }
             }
         });
     }
@@ -791,6 +924,101 @@
         URL.revokeObjectURL(url);
 
         showAlert('info', 'Document downloaded as Markdown. Word conversion feature coming soon!');
+    }
+
+    // Auto-refresh functions
+    function toggleAutoRefresh() {
+        const toggle = document.getElementById('autoRefreshToggle');
+        const status = document.getElementById('autoRefreshStatus');
+        const timerDisplay = document.getElementById('autoRefreshTimer');
+
+        autoRefreshEnabled = toggle.checked;
+
+        if (autoRefreshEnabled) {
+            if (!currentSession) {
+                alert('Please create a session first');
+                toggle.checked = false;
+                autoRefreshEnabled = false;
+                return;
+            }
+
+            status.textContent = 'Enabled';
+            status.style.color = '#28a745';
+            timerDisplay.style.display = 'inline-block';
+
+            // Start countdown
+            startAutoRefresh();
+            showAlert('success', `Auto-refresh enabled. Refreshing every ${autoRefreshInterval} seconds.`);
+        } else {
+            status.textContent = 'Disabled';
+            status.style.color = '';
+            timerDisplay.style.display = 'none';
+
+            // Stop timers
+            stopAutoRefresh();
+            showAlert('info', 'Auto-refresh disabled.');
+        }
+    }
+
+    function updateRefreshInterval() {
+        const select = document.getElementById('refreshInterval');
+        autoRefreshInterval = parseInt(select.value);
+
+        // If auto-refresh is enabled, restart with new interval
+        if (autoRefreshEnabled) {
+            stopAutoRefresh();
+            startAutoRefresh();
+            showAlert('info', `Auto-refresh interval updated to ${autoRefreshInterval} seconds.`);
+        }
+    }
+
+    function startAutoRefresh() {
+        // Reset countdown
+        countdownSeconds = autoRefreshInterval;
+        updateCountdownDisplay();
+
+        // Start countdown timer (updates every second)
+        countdownTimer = setInterval(function() {
+            countdownSeconds--;
+            updateCountdownDisplay();
+
+            if (countdownSeconds <= 0) {
+                // Time's up - trigger refresh
+                performAutoRefresh();
+            }
+        }, 1000);
+    }
+
+    function stopAutoRefresh() {
+        if (countdownTimer) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
+    }
+
+    function updateCountdownDisplay() {
+        const display = document.getElementById('countdownDisplay');
+        display.textContent = countdownSeconds;
+
+        // Visual feedback when countdown is low
+        if (countdownSeconds <= 5) {
+            display.style.color = '#ff6b6b';
+            display.style.fontWeight = 'bold';
+        } else {
+            display.style.color = '#ffd700';
+            display.style.fontWeight = 'bold';
+        }
+    }
+
+    function performAutoRefresh() {
+        // Reset countdown for next cycle
+        countdownSeconds = autoRefreshInterval;
+        updateCountdownDisplay();
+
+        // Perform the refresh
+        if (currentSession) {
+            refreshContent(true); // true = silent mode (no alert)
+        }
     }
 
     function showAlert(type, message) {
