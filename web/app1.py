@@ -30,7 +30,7 @@ app.secret_key = os.urandom(24)
 
 # Load configuration
 props = PropertiesConfigurator()
-props.load_properties('application.properties')
+props.load_properties('config/application.properties')
 
 # Initialize database
 initialize_db(db_type='sqlite', db_path='data/abhikarta.db')

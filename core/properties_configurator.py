@@ -71,3 +71,7 @@ class PropertiesConfigurator:
     def get_all(self) -> Dict[str, str]:
         """Get all properties"""
         return self._properties.copy()
+
+    def get_system_name(self) -> str:
+        """Get the system/application name"""
+        return self.get('app.name', 'Abhikarta')

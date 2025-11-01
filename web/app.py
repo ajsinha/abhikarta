@@ -43,7 +43,7 @@ class AbhikartaApp:
     Encapsulates the Flask application and all its dependencies
     """
 
-    def __init__(self, config_file='application.properties'):
+    def __init__(self, config_file='config/application.properties'):
         """
         Initialize the Abhikarta application
 
@@ -82,10 +82,20 @@ class AbhikartaApp:
             except:
                 return str(value)
 
+        # Add context processor to make system name available to all templates
+        @self.app.context_processor
+        def inject_system_name():
+            # Will be set after configuration is loaded
+            system_name = getattr(self, 'system_name', 'Abhikarta')
+            return dict(system_name=system_name)
+
     def _load_configuration(self):
         """Load application configuration"""
         self.props = PropertiesConfigurator()
         self.props.load_properties(self.config_file)
+
+        # Store system name for easy access
+        self.system_name = self.props.get_system_name()
 
     def _initialize_database(self):
         """Initialize database and tables"""

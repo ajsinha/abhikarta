@@ -23,9 +23,10 @@ def print_banner(abhikarta_app):
     host = props.get('server.host', '0.0.0.0')
     port = props.get_int('server.port', 5001)
     debug = props.get_bool('server.debug', True)
+    system_name = props.get_system_name()
 
     print("=" * 60)
-    print("Abhikarta - Multi-Agent Orchestration System")
+    print(f"{system_name} - Multi-Agent Orchestration System")
     print("© 2025-2030 Ashutosh Sinha")
     print("ajsinha@gmail.com")
     print("https://www.github.com/ajsinha/abhikarta")
@@ -43,7 +44,7 @@ def main():
     """Main entry point"""
     try:
         # Initialize the Abhikarta application
-        abhikarta_app = AbhikartaApp(config_file='application.properties')
+        abhikarta_app = AbhikartaApp(config_file='config/application.properties')
 
         # Print startup banner
         print_banner(abhikarta_app)
