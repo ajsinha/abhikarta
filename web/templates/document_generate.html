@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+
+{% block title %}Document Generation{% endblock %}
+
+{% block extra_head %}
+<!-- Markdown Editor CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<style>
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        background-color: #f8f9fa;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        margin-bottom: 15px;
+    }
+
+    .upload-area:hover {
+        border-color: #0d6efd;
+        background-color: #e7f1ff;
+    }
+
+    .upload-area.dragover {
+        border-color: #0d6efd;
+        background-color: #cfe2ff;
+    }
+
+    .upload-area i {
+        font-size: 48px;
+        color: #6c757d;
+        margin-bottom: 15px;
+    }
+
+    .file-list {
+        max-height: 150px;
+        overflow-y: auto;
+        margin-top: 10px;
+    }
+
+    .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        margin-bottom: 5px;
+    }
+
+    .file-item .remove-file {
+        cursor: pointer;
+        color: #dc3545;
+    }
+
+    .editor-container {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .editor-toolbar {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .session-info {
+        background-color: #e7f1ff;
+        border-left: 4px solid #0d6efd;
+        padding: 10px 15px;
+        margin-bottom: 15px;
+        border-radius: 4px;
+    }
+
+    .CodeMirror {
+        min-height: 600px;
+        border: none;
+    }
+
+    .EasyMDEContainer {
+        height: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="fas fa-file-alt"></i> Document Generation</h1>
+        <p class="text-muted">Upload documents, provide instructions, and generate comprehensive reports</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left Column: Upload Documents and Monitor -->
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-upload"></i> Upload Documents and Monitor</h5>
+            </div>
+            <div class="card-body">
+                <!-- Session Creation -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Session Name</label>
+                    <div class="input-group mb-2">
+                        <input type="text"
+                               class="form-control form-control-sm"
+                               id="sessionNameInput"
+                               placeholder="e.g., project_2025"
+                               pattern="[a-zA-Z0-9_]+"
+                               title="Alphanumerics and underscores only">
+                        <button class="btn btn-sm btn-primary"
+                                id="createSessionBtn"
+                                onclick="createSession()">
+                            <i class="fas fa-plus"></i> Start New Session
+                        </button>
+                    </div>
+                    <small class="text-muted">Alphanumerics and underscore only, must contain at least one letter</small>
+
+                    <!-- Session Info Display -->
+                    <div id="sessionInfo" class="session-info d-none mt-2">
+                        <strong>Active Session:</strong> <span id="activeSessionName"></span>
+                    </div>
+                </div>
+
+                <!-- File Upload Area -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Upload Files (Max 10)</label>
+                    <div id="fileCounter" class="text-center mb-2" style="display: none;">
+                        <span class="badge bg-info">
+                            <i class="fas fa-file"></i> <span id="fileCount">0</span> / 10 files
+                        </span>
+                    </div>
+                    <div class="upload-area" id="uploadArea">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p class="mb-0">Drag & drop files here</p>
+                        <p class="small text-muted">or click to select</p>
+                        <input type="file"
+                               id="fileInput"
+                               multiple
+                               accept=".txt,.pdf,.doc,.docx,.md,.csv,.json"
+                               style="display: none;">
+                    </div>
+                    <div id="fileList" class="file-list"></div>
+                    <small class="text-muted">Supported: txt, pdf, doc, docx, md, csv, json</small>
+                </div>
+
+                <!-- Template Selection -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Choose Template</label>
+                    <select class="form-select form-select-sm" id="templateSelect">
+                        <option value="Default">Default</option>
+                        <option value="CCR PFE">CCR PFE</option>
+                    </select>
+                </div>
+
+                <!-- Instructions -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Comments and Instructions</label>
+                    <textarea class="form-control form-control-sm"
+                              id="instructionsText"
+                              rows="5"
+                              placeholder="Enter any specific instructions or comments for document generation..."></textarea>
+                </div>
+
+                <!-- Submit Button -->
+                <button class="btn btn-success w-100"
+                        id="submitBtn"
+                        onclick="generateDocument()"
+                        disabled>
+                    <i class="fas fa-magic"></i> Generate Document
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: View Generated Document -->
+    <div class="col-md-9">
+        <div class="card h-100">
+            <div class="card-header bg-success text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-eye"></i> View the Generated Document</h5>
+                    <button class="btn btn-sm btn-light"
+                            id="downloadBtn"
+                            onclick="downloadDocument()"
+                            disabled>
+                        <i class="fas fa-download"></i> Download as Word
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="editor-container">
+                    <textarea id="markdownEditor"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Markdown Editor JS -->
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+
+<script>
+    let currentSession = null;
+    let uploadedFiles = [];
+    let easyMDE = null;
+
+    // Initialize Markdown Editor
+    document.addEventListener('DOMContentLoaded', function() {
+        easyMDE = new EasyMDE({
+            element: document.getElementById('markdownEditor'),
+            placeholder: 'Generated document will appear here...',
+            spellChecker: false,
+            minHeight: '600px',
+            status: ['lines', 'words', 'cursor'],
+            toolbar: [
+                'bold', 'italic', 'heading', '|',
+                'quote', 'unordered-list', 'ordered-list', '|',
+                'link', 'image', '|',
+                {
+                    name: 'table',
+                    action: function customFunction(editor) {
+                        var cm = editor.codemirror;
+                        var output = '\n| Column 1 | Column 2 | Column 3 |\n';
+                        output += '| -------- | -------- | -------- |\n';
+                        output += '| Text     | Text     | Text     |\n\n';
+                        cm.replaceSelection(output);
+                    },
+                    className: 'fa fa-table',
+                    title: 'Insert Table',
+                },
+                '|',
+                'preview', 'side-by-side', 'fullscreen', '|',
+                'guide'
+            ]
+        });
+
+        // Set initial placeholder content
+        easyMDE.value('# Welcome to Document Generation\n\nCreate a session and upload files to begin generating documents.');
+
+        // Setup upload area drag and drop
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            // Clear the input so the same file can be selected again
+            fileInput.value = '';
+        });
+    });
+
+    function createSession() {
+        const sessionName = document.getElementById('sessionNameInput').value.trim();
+
+        if (!sessionName) {
+            alert('Please enter a session name');
+            return;
+        }
+
+        // Validate session name
+        if (!/[a-zA-Z]/.test(sessionName)) {
+            alert('Session name must contain at least one alphabetic character');
+            return;
+        }
+
+        if (!/^[a-zA-Z0-9_]+$/.test(sessionName)) {
+            alert('Session name can only contain alphanumerics and underscores');
+            return;
+        }
+
+        // Create session via API
+        $.ajax({
+            url: '{{ url_for("create_document_session") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ session_name: sessionName }),
+            success: function(response) {
+                if (response.success) {
+                    currentSession = sessionName;
+                    document.getElementById('activeSessionName').textContent = sessionName;
+                    document.getElementById('sessionInfo').classList.remove('d-none');
+                    document.getElementById('sessionNameInput').disabled = true;
+                    document.getElementById('createSessionBtn').disabled = true;
+
+                    // Show success message
+                    showAlert('success', response.message);
+                } else {
+                    showAlert('danger', response.error);
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Failed to create session';
+                showAlert('danger', error);
+            }
+        });
+    }
+
+    function handleFiles(files) {
+        if (!currentSession) {
+            alert('Please create a session first');
+            return;
+        }
+
+        const fileArray = Array.from(files);
+
+        if (uploadedFiles.length + fileArray.length > 10) {
+            alert('Maximum 10 files allowed');
+            return;
+        }
+
+        // Add files to array
+        uploadedFiles = uploadedFiles.concat(fileArray);
+        updateFileList();
+        updateFileCounter();
+
+        // Automatically upload the newly added files
+        uploadNewFiles(fileArray);
+    }
+
+    function uploadNewFiles(newFiles) {
+        if (newFiles.length === 0) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('session_name', currentSession);
+
+        newFiles.forEach(file => {
+            formData.append('files', file);
+        });
+
+        // Show uploading status
+        const fileList = document.getElementById('fileList');
+        const uploadingMsg = document.createElement('div');
+        uploadingMsg.className = 'alert alert-info py-2 small';
+        uploadingMsg.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading ' + newFiles.length + ' file(s)...';
+        fileList.appendChild(uploadingMsg);
+
+        $.ajax({
+            url: '{{ url_for("upload_documents") }}',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                // Remove uploading message
+                uploadingMsg.remove();
+
+                if (response.success) {
+                    showAlert('success', response.message);
+                    // Enable submit button after successful upload
+                    document.getElementById('submitBtn').disabled = false;
+                } else {
+                    showAlert('danger', response.error);
+                }
+            },
+            error: function(xhr) {
+                uploadingMsg.remove();
+                const error = xhr.responseJSON?.error || 'Upload failed';
+                showAlert('danger', error);
+            }
+        });
+    }
+
+    function updateFileList() {
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = '';
+
+        uploadedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+                <span><i class="fas fa-file"></i> ${file.name}</span>
+                <span class="remove-file" onclick="removeFile(${index})">
+                    <i class="fas fa-times"></i>
+                </span>
+            `;
+            fileList.appendChild(fileItem);
+        });
+
+        updateFileCounter();
+    }
+
+    function updateFileCounter() {
+        const counter = document.getElementById('fileCounter');
+        const count = document.getElementById('fileCount');
+
+        if (uploadedFiles.length > 0) {
+            counter.style.display = 'block';
+            count.textContent = uploadedFiles.length;
+        } else {
+            counter.style.display = 'none';
+        }
+    }
+
+    function removeFile(index) {
+        uploadedFiles.splice(index, 1);
+        updateFileList();
+        document.getElementById('submitBtn').disabled = uploadedFiles.length === 0;
+    }
+
+    function generateDocument() {
+        if (!currentSession) {
+            alert('Please create a session first');
+            return;
+        }
+
+        const template = document.getElementById('templateSelect').value;
+        const instructions = document.getElementById('instructionsText').value.trim();
+
+        // Show loading
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        submitBtn.disabled = true;
+
+        $.ajax({
+            url: '{{ url_for("generate_document") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_name: currentSession,
+                template: template,
+                instructions: instructions
+            }),
+            success: function(response) {
+                if (response.success) {
+                    // Update editor with generated content
+                    easyMDE.value(response.content);
+
+                    // Enable download button
+                    document.getElementById('downloadBtn').disabled = false;
+
+                    showAlert('success', `Document generated successfully! Processed ${response.files_processed} file(s).`);
+                } else {
+                    showAlert('danger', response.error);
+                }
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Generation failed';
+                showAlert('danger', error);
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    }
+
+    function downloadDocument() {
+        const content = easyMDE.value();
+
+        if (!content || content.trim() === '') {
+            alert('No content to download');
+            return;
+        }
+
+        // For now, download as markdown file
+        // In a real implementation, you would convert to Word format on the backend
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentSession || 'document'}_generated.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showAlert('info', 'Document downloaded as Markdown. Word conversion feature coming soon!');
+    }
+
+    function showAlert(type, message) {
+        const alertHtml = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+
+        // Insert alert at the top of the main content
+        const main = document.querySelector('main');
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = alertHtml;
+        main.insertBefore(tempDiv.firstElementChild, main.firstChild);
+    }
+</script>
+{% endblock %}

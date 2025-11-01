@@ -33,6 +33,7 @@ from routes.user_routes import UserRoutes
 from routes.monitoring_routes import MonitoringRoutes
 from routes.config_routes import ConfigRoutes
 from routes.llm_routes import LLMRoutes
+from routes.document_routes import DocumentRoutes
 
 from llm.llm_facade import LLMFacade
 
@@ -173,6 +174,10 @@ class AbhikartaApp:
         config_routes = ConfigRoutes(
             self.app, self.user_registry, self.agent_registry,
             self.tool_registry, self.dag_registry, login_required
+        )
+
+        document_routes = DocumentRoutes(
+            self.app, self.user_registry, login_required
         )
 
     def get_app(self):
