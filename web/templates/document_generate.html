@@ -293,6 +293,13 @@
                                 disabled>
                             <i class="fas fa-folder-open"></i> Load
                         </button>
+                        <button class="btn btn-sm btn-danger"
+                                id="deleteSessionBtn"
+                                onclick="deleteExistingSession()"
+                                disabled
+                                title="Delete selected session">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
                     </div>
                     <small class="text-muted" id="sessionDropdownHelp">No sessions found</small>
                 </div>
@@ -555,10 +562,13 @@
         // Load existing sessions on page load
         loadExistingSessions();
 
-        // Enable/disable load button based on dropdown selection
+        // Enable/disable load and delete buttons based on dropdown selection
         document.getElementById('existingSessionsDropdown').addEventListener('change', function() {
             const loadBtn = document.getElementById('loadSessionBtn');
-            loadBtn.disabled = (this.value === '');
+            const deleteBtn = document.getElementById('deleteSessionBtn');
+            const isSelected = (this.value !== '');
+            loadBtn.disabled = !isSelected;
+            deleteBtn.disabled = !isSelected;
         });
     });
 
@@ -598,6 +608,7 @@
                     // Disable the dropdown and load button after successful session creation
                     document.getElementById('existingSessionsDropdown').disabled = true;
                     document.getElementById('loadSessionBtn').disabled = true;
+                    document.getElementById('deleteSessionBtn').disabled = true;
 
                     // Handle existing files if session already existed
                     if (response.existing_files && response.existing_files.length > 0) {
@@ -706,6 +717,7 @@
                     // Disable the dropdown and load button after successful load
                     dropdown.disabled = true;
                     document.getElementById('loadSessionBtn').disabled = true;
+                    document.getElementById('deleteSessionBtn').disabled = true;
 
                     // Handle existing files if session already existed
                     if (response.existing_files && response.existing_files.length > 0) {
@@ -739,6 +751,63 @@
             error: function(xhr) {
                 const error = xhr.responseJSON?.error || 'Failed to load session';
                 showAlert('danger', error);
+            }
+        });
+    }
+
+    function deleteExistingSession() {
+        const dropdown = document.getElementById('existingSessionsDropdown');
+        const sessionName = dropdown.value;
+
+        if (!sessionName) {
+            alert('Please select a session to delete');
+            return;
+        }
+
+        // Confirm deletion
+        if (!confirm(`Are you sure you want to delete session "${sessionName}"?\n\nThis will permanently delete all files in this session and cannot be undone.`)) {
+            return;
+        }
+
+        // Show loading state
+        const deleteBtn = document.getElementById('deleteSessionBtn');
+        const originalText = deleteBtn.innerHTML;
+        deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+        deleteBtn.disabled = true;
+
+        // Call backend to delete session
+        $.ajax({
+            url: '{{ url_for("delete_document_session") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ session_name: sessionName }),
+            success: function(response) {
+                if (response.success) {
+                    showAlert('success', response.message);
+
+                    // Reload the sessions list
+                    loadExistingSessions();
+
+                    // Reset dropdown selection
+                    dropdown.value = '';
+
+                    // Disable buttons
+                    document.getElementById('loadSessionBtn').disabled = true;
+                    deleteBtn.disabled = true;
+                } else {
+                    showAlert('danger', response.error);
+                }
+
+                // Restore button
+                deleteBtn.innerHTML = originalText;
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Failed to delete session';
+                showAlert('danger', error);
+
+                // Restore button
+                deleteBtn.innerHTML = originalText;
+                deleteBtn.disabled = false;
             }
         });
     }

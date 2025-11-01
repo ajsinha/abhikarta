@@ -88,6 +88,43 @@ class DocumentRoutes:
             except Exception as e:
                 return jsonify({'success': False, 'error': f'Failed to list sessions: {str(e)}'}), 500
 
+        @self.app.route('/api/document/delete-session', methods=['POST'])
+        @self.login_required
+        def delete_document_session():
+            """Delete a document generation session"""
+            import shutil
+
+            user = self.user_registry.get_user(session['user_id'])
+            data = request.get_json()
+
+            session_name = data.get('session_name', '').strip()
+
+            if not session_name:
+                return jsonify({'success': False, 'error': 'Session name is required'}), 400
+
+            # Path to session folder
+            session_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen', session_name)
+
+            try:
+                # Check if session exists
+                if not os.path.exists(session_path):
+                    return jsonify({'success': False, 'error': 'Session not found'}), 404
+
+                # Check if it's a directory (safety check)
+                if not os.path.isdir(session_path):
+                    return jsonify({'success': False, 'error': 'Invalid session path'}), 400
+
+                # Delete the entire session folder
+                shutil.rmtree(session_path)
+
+                return jsonify({
+                    'success': True,
+                    'message': f'Session "{session_name}" deleted successfully'
+                })
+
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Failed to delete session: {str(e)}'}), 500
+
         @self.app.route('/api/document/create-session', methods=['POST'])
         @self.login_required
         def create_document_session():
@@ -479,6 +516,7 @@ class DocumentRoutes:
 
     def _generate_document_content(self, session_name, template, instructions, files):
         """Generate hardcoded document content"""
+
         def load_sample_content():
             with open("data/sample/sample_pfe_model_documentation.md", "r") as file:
                 content = file.read()
