@@ -91,6 +91,74 @@
     .EasyMDEContainer {
         height: 100%;
     }
+
+    /* Style links in preview mode */
+    .editor-preview a,
+    .editor-preview-side a {
+        color: #0d6efd;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+    .editor-preview a:hover,
+    .editor-preview-side a:hover {
+        color: #0a58ca;
+    }
+
+    /* Ensure preview content is readable */
+    .editor-preview,
+    .editor-preview-side {
+        padding: 20px;
+        font-size: 16px;
+        line-height: 1.6;
+    }
+
+    .editor-preview h1,
+    .editor-preview-side h1 {
+        margin-top: 24px;
+        margin-bottom: 16px;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+
+    .editor-preview h2,
+    .editor-preview-side h2 {
+        margin-top: 24px;
+        margin-bottom: 16px;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+
+    .editor-preview table,
+    .editor-preview-side table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 16px 0;
+    }
+
+    .editor-preview table th,
+    .editor-preview table td,
+    .editor-preview-side table th,
+    .editor-preview-side table td {
+        border: 1px solid #ddd;
+        padding: 8px 12px;
+        text-align: left;
+    }
+
+    .editor-preview table th,
+    .editor-preview-side table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+
+    /* Button group styling */
+    .btn-group .btn {
+        margin-left: 5px;
+    }
+
+    .btn-group .btn:first-child {
+        margin-left: 0;
+    }
 </style>
 {% endblock %}
 
@@ -191,12 +259,28 @@
             <div class="card-header bg-success text-white">
                 <div class="d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-eye"></i> View the Generated Document</h5>
-                    <button class="btn btn-sm btn-light"
-                            id="downloadBtn"
-                            onclick="downloadDocument()"
-                            disabled>
-                        <i class="fas fa-download"></i> Download as Word
-                    </button>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-light"
+                                id="refreshBtn"
+                                onclick="refreshContent()"
+                                title="Refresh content from server">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn btn-sm btn-light"
+                                id="rerunBtn"
+                                onclick="rerunGeneration()"
+                                disabled
+                                title="Regenerate document with current content">
+                            <i class="fas fa-redo"></i> Rerun
+                        </button>
+                        <button class="btn btn-sm btn-light"
+                                id="downloadBtn"
+                                onclick="downloadDocument()"
+                                disabled
+                                title="Download as Word document">
+                            <i class="fas fa-download"></i> Download as Word
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -227,6 +311,15 @@
             spellChecker: false,
             minHeight: '600px',
             status: ['lines', 'words', 'cursor'],
+            initialValue: '# Welcome to Document Generation\n\nCreate a session and upload files to begin generating documents.',
+            previewRender: function(plainText) {
+                // Custom preview render to prevent opening links in new window
+                return this.parent.markdown(plainText);
+            },
+            renderingConfig: {
+                singleLineBreaks: false,
+                codeSyntaxHighlighting: true,
+            },
             toolbar: [
                 'bold', 'italic', 'heading', '|',
                 'quote', 'unordered-list', 'ordered-list', '|',
@@ -249,8 +342,53 @@
             ]
         });
 
-        // Set initial placeholder content
-        easyMDE.value('# Welcome to Document Generation\n\nCreate a session and upload files to begin generating documents.');
+        // Start in preview mode by default
+        setTimeout(function() {
+            easyMDE.togglePreview();
+        }, 100);
+
+        // Prevent links from opening in new window in preview/side-by-side mode
+        // Override the default link behavior
+        const originalMarkdown = easyMDE.markdown.bind(easyMDE);
+        easyMDE.markdown = function(text) {
+            const html = originalMarkdown(text);
+            // Remove target="_blank" from all links
+            return html.replace(/target="_blank"/g, '');
+        };
+
+        // Add click handler to preview panes to handle links properly
+        document.addEventListener('click', function(e) {
+            // Check if click is on a link in preview mode
+            if (e.target.tagName === 'A') {
+                const previewPane = e.target.closest('.editor-preview, .editor-preview-side');
+                if (previewPane) {
+                    // Prevent default behavior - keep content in pane, don't navigate
+                    e.preventDefault();
+
+                    const href = e.target.getAttribute('href');
+
+                    if (href && href.startsWith('#')) {
+                        // Handle internal anchor links (scroll to section)
+                        const target = previewPane.querySelector(href);
+                        if (target) {
+                            target.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    } else if (href && (href.startsWith('http') || href.startsWith('www'))) {
+                        // For external links, show dialog with options
+                        const message = `Link: ${href}\n\nThis link leads outside the document. What would you like to do?`;
+                        if (confirm(message + '\n\nClick OK to open in new tab, or Cancel to copy URL.')) {
+                            window.open(href, '_blank');
+                        } else {
+                            // Copy to clipboard
+                            navigator.clipboard.writeText(href).then(function() {
+                                showAlert('info', 'URL copied to clipboard');
+                            });
+                        }
+                    }
+                    // For other links, just prevent navigation to keep content in pane
+                }
+            }
+        });
 
         // Setup upload area drag and drop
         const uploadArea = document.getElementById('uploadArea');
@@ -494,8 +632,16 @@
                     // Update editor with generated content
                     easyMDE.value(response.content);
 
-                    // Enable download button
+                    // Show in preview mode
+                    setTimeout(function() {
+                        if (!easyMDE.isPreviewActive()) {
+                            easyMDE.togglePreview();
+                        }
+                    }, 100);
+
+                    // Enable buttons
                     document.getElementById('downloadBtn').disabled = false;
+                    document.getElementById('rerunBtn').disabled = false;
 
                     showAlert('success', `Document generated successfully! Processed ${response.files_processed} file(s).`);
                 } else {
@@ -509,6 +655,117 @@
                 showAlert('danger', error);
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
+            }
+        });
+    }
+
+    function refreshContent() {
+        if (!currentSession) {
+            alert('Please create a session first');
+            return;
+        }
+
+        const template = document.getElementById('templateSelect').value;
+        const instructions = document.getElementById('instructionsText').value.trim();
+
+        // Show loading
+        const refreshBtn = document.getElementById('refreshBtn');
+        const originalText = refreshBtn.innerHTML;
+        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+        refreshBtn.disabled = true;
+
+        $.ajax({
+            url: '{{ url_for("generate_document") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_name: currentSession,
+                template: template,
+                instructions: instructions
+            }),
+            success: function(response) {
+                if (response.success) {
+                    // Update editor with fresh content from server
+                    easyMDE.value(response.content);
+
+                    // Show in preview mode
+                    setTimeout(function() {
+                        if (!easyMDE.isPreviewActive()) {
+                            easyMDE.togglePreview();
+                        }
+                    }, 100);
+
+                    // Enable buttons
+                    document.getElementById('downloadBtn').disabled = false;
+                    document.getElementById('rerunBtn').disabled = false;
+
+                    showAlert('success', `Content refreshed from server! Processed ${response.files_processed} file(s).`);
+                } else {
+                    showAlert('danger', response.error);
+                }
+                refreshBtn.innerHTML = originalText;
+                refreshBtn.disabled = false;
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Refresh failed';
+                showAlert('danger', error);
+                refreshBtn.innerHTML = originalText;
+                refreshBtn.disabled = false;
+            }
+        });
+    }
+
+    function rerunGeneration() {
+        if (!currentSession) {
+            alert('Please create a session first');
+            return;
+        }
+
+        // Get current content from editor
+        const currentContent = easyMDE.value();
+        const template = document.getElementById('templateSelect').value;
+        const instructions = document.getElementById('instructionsText').value.trim();
+
+        // Show loading
+        const rerunBtn = document.getElementById('rerunBtn');
+        const originalText = rerunBtn.innerHTML;
+        rerunBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rerunning...';
+        rerunBtn.disabled = true;
+
+        $.ajax({
+            url: '{{ url_for("rerun_generation") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_name: currentSession,
+                template: template,
+                instructions: instructions,
+                current_content: currentContent
+            }),
+            success: function(response) {
+                if (response.success) {
+                    // Update editor with regenerated content
+                    easyMDE.value(response.content);
+
+                    // Show in preview mode
+                    setTimeout(function() {
+                        if (!easyMDE.isPreviewActive()) {
+                            easyMDE.togglePreview();
+                        }
+                    }, 100);
+
+                    showAlert('success', 'Document regenerated successfully!');
+                } else {
+                    showAlert('danger', response.error);
+                }
+                rerunBtn.innerHTML = originalText;
+                rerunBtn.disabled = false;
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Rerun failed';
+                showAlert('danger', error);
+                rerunBtn.innerHTML = originalText;
+                rerunBtn.disabled = false;
             }
         });
     }

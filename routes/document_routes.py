@@ -9,13 +9,12 @@ import os
 import re
 from flask import session, render_template, request, jsonify
 from werkzeug.utils import secure_filename
-from routes.base_routes import BaseRoutes
 
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx', 'md', 'csv', 'json'}
 MAX_FILES = 10
 
 
-class DocumentRoutes(BaseRoutes):
+class DocumentRoutes:
     """Document generation routes handler"""
 
     def __init__(self, app, user_registry, login_required):
@@ -27,8 +26,6 @@ class DocumentRoutes(BaseRoutes):
             user_registry: User registry instance
             login_required: Login required decorator
         """
-        super().__init__()
-
         self.app = app
         self.user_registry = user_registry
         self.login_required = login_required
@@ -204,6 +201,45 @@ class DocumentRoutes(BaseRoutes):
                 })
             except Exception as e:
                 return jsonify({'success': False, 'error': f'Failed to delete file: {str(e)}'}), 500
+
+        @self.app.route('/api/document/rerun', methods=['POST'])
+        @self.login_required
+        def rerun_generation():
+            """Rerun document generation with current editor content"""
+            user = self.user_registry.get_user(session['user_id'])
+            data = request.get_json()
+
+            session_name = data.get('session_name', '').strip()
+            template = data.get('template', 'Default')
+            instructions = data.get('instructions', '').strip()
+            current_content = data.get('current_content', '').strip()
+
+            if not session_name:
+                return jsonify({'success': False, 'error': 'Session name is required'}), 400
+
+            # Get uploaded files from inbox (for context)
+            inbox_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen', session_name, 'inbox')
+
+            if not os.path.exists(inbox_path):
+                return jsonify({'success': False, 'error': 'Session not found'}), 404
+
+            uploaded_files = [f for f in os.listdir(inbox_path) if os.path.isfile(os.path.join(inbox_path, f))]
+
+            # For now, return the same hardcoded content (can be enhanced later to process current_content)
+            # In a real implementation, you might:
+            # - Parse current_content and enhance it
+            # - Use LLM to regenerate based on current_content
+            # - Apply additional processing
+
+            generated_content = self._generate_document_content(session_name, template, instructions, uploaded_files)
+
+            return jsonify({
+                'success': True,
+                'content': generated_content,
+                'session_name': session_name,
+                'template': template,
+                'message': 'Document regenerated (current implementation uses same template)'
+            })
 
     def _allowed_file(self, filename):
         """Check if file extension is allowed"""
