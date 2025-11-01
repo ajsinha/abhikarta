@@ -254,12 +254,7 @@
                         Next refresh in: <strong><span id="countdownDisplay">30</span>s</strong>
                     </div>
                 </div>
-                <div class="d-flex align-items-center">
-                    <!-- Status Indicator Button -->
-                    <button class="btn btn-warning me-3" id="statusIndicator" disabled style="min-width: 140px;">
-                        <i class="fas fa-hourglass-start"></i> In Preparation
-                    </button>
-                    <div class="autorefresh-settings">
+                <div class="autorefresh-settings">
                     <label class="me-2 mb-0 small">Interval:</label>
                     <select class="form-select form-select-sm"
                             id="refreshInterval"
@@ -285,6 +280,27 @@
                 <h5 class="mb-0"><i class="fas fa-upload"></i> Upload Documents and Monitor</h5>
             </div>
             <div class="card-body">
+                <!-- Load Existing Session -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Load Existing Session</label>
+                    <div class="input-group mb-2">
+                        <select class="form-select form-select-sm" id="existingSessionsDropdown">
+                            <option value="">-- Select a session --</option>
+                        </select>
+                        <button class="btn btn-sm btn-info"
+                                id="loadSessionBtn"
+                                onclick="loadExistingSession()"
+                                disabled>
+                            <i class="fas fa-folder-open"></i> Load
+                        </button>
+                    </div>
+                    <small class="text-muted" id="sessionDropdownHelp">No sessions found</small>
+                </div>
+
+                <div class="text-center mb-3">
+                    <span class="text-muted">— OR —</span>
+                </div>
+
                 <!-- Session Creation -->
                 <div class="mb-3">
                     <label class="form-label fw-bold">Session Name</label>
@@ -535,6 +551,15 @@
         window.addEventListener('beforeunload', function() {
             stopAutoRefresh();
         });
+
+        // Load existing sessions on page load
+        loadExistingSessions();
+
+        // Enable/disable load button based on dropdown selection
+        document.getElementById('existingSessionsDropdown').addEventListener('change', function() {
+            const loadBtn = document.getElementById('loadSessionBtn');
+            loadBtn.disabled = (this.value === '');
+        });
     });
 
     function createSession() {
@@ -570,17 +595,149 @@
                     document.getElementById('sessionNameInput').disabled = true;
                     document.getElementById('createSessionBtn').disabled = true;
 
+                    // Disable the dropdown and load button after successful session creation
+                    document.getElementById('existingSessionsDropdown').disabled = true;
+                    document.getElementById('loadSessionBtn').disabled = true;
+
+                    // Handle existing files if session already existed
+                    if (response.existing_files && response.existing_files.length > 0) {
+                        // Clear current file list
+                        uploadedFiles = [];
+
+                        // Add existing files as File-like objects for display
+                        response.existing_files.forEach(filename => {
+                            // Create a file-like object for display purposes
+                            uploadedFiles.push({
+                                name: filename,
+                                size: 0,  // We don't have the size info
+                                type: '',  // We don't have the type info
+                                isExisting: true  // Mark as existing file
+                            });
+                        });
+
+                        // Update the UI
+                        updateFileList();
+                        updateFileCounter();
+
+                        // Enable submit button since there are already files
+                        document.getElementById('submitBtn').disabled = false;
+                    }
+
                     // Show success message
                     showAlert('success', response.message);
-
-                    // Check initial status
-                    checkDocumentStatus();
                 } else {
                     showAlert('danger', response.error);
                 }
             },
             error: function(xhr) {
                 const error = xhr.responseJSON?.error || 'Failed to create session';
+                showAlert('danger', error);
+            }
+        });
+    }
+
+    function loadExistingSessions() {
+        // Load the list of existing sessions into the dropdown
+        $.ajax({
+            url: '{{ url_for("list_document_sessions") }}',
+            method: 'GET',
+            success: function(response) {
+                const dropdown = document.getElementById('existingSessionsDropdown');
+                const helpText = document.getElementById('sessionDropdownHelp');
+
+                // Clear existing options except the first one
+                dropdown.innerHTML = '<option value="">-- Select a session --</option>';
+
+                if (response.success && response.sessions && response.sessions.length > 0) {
+                    // Add each session to the dropdown
+                    response.sessions.forEach(session => {
+                        const option = document.createElement('option');
+                        option.value = session.name;
+                        option.textContent = `${session.name} (${session.file_count} file${session.file_count !== 1 ? 's' : ''})`;
+                        dropdown.appendChild(option);
+                    });
+
+                    // Update help text
+                    helpText.textContent = `${response.count} session${response.count !== 1 ? 's' : ''} available`;
+                    helpText.classList.remove('text-danger');
+                    helpText.classList.add('text-muted');
+                } else {
+                    // No sessions found
+                    helpText.textContent = 'No sessions found. Create one below!';
+                    helpText.classList.remove('text-danger');
+                    helpText.classList.add('text-muted');
+                }
+            },
+            error: function(xhr) {
+                const helpText = document.getElementById('sessionDropdownHelp');
+                helpText.textContent = 'Error loading sessions';
+                helpText.classList.remove('text-muted');
+                helpText.classList.add('text-danger');
+            }
+        });
+    }
+
+    function loadExistingSession() {
+        const dropdown = document.getElementById('existingSessionsDropdown');
+        const sessionName = dropdown.value;
+
+        if (!sessionName) {
+            alert('Please select a session to load');
+            return;
+        }
+
+        // Use the same API as creating a session (it handles existing sessions)
+        $.ajax({
+            url: '{{ url_for("create_document_session") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ session_name: sessionName }),
+            success: function(response) {
+                if (response.success) {
+                    currentSession = sessionName;
+
+                    // Update UI
+                    document.getElementById('sessionNameInput').value = sessionName;
+                    document.getElementById('activeSessionName').textContent = sessionName;
+                    document.getElementById('sessionInfo').classList.remove('d-none');
+                    document.getElementById('sessionNameInput').disabled = true;
+                    document.getElementById('createSessionBtn').disabled = true;
+
+                    // Disable the dropdown and load button after successful load
+                    dropdown.disabled = true;
+                    document.getElementById('loadSessionBtn').disabled = true;
+
+                    // Handle existing files if session already existed
+                    if (response.existing_files && response.existing_files.length > 0) {
+                        // Clear current file list
+                        uploadedFiles = [];
+
+                        // Add existing files as File-like objects for display
+                        response.existing_files.forEach(filename => {
+                            uploadedFiles.push({
+                                name: filename,
+                                size: 0,
+                                type: '',
+                                isExisting: true
+                            });
+                        });
+
+                        // Update the UI
+                        updateFileList();
+                        updateFileCounter();
+
+                        // Enable submit button since there are already files
+                        document.getElementById('submitBtn').disabled = false;
+                    }
+
+                    // Show success message
+                    showAlert('success', response.message);
+                } else {
+                    showAlert('danger', response.error);
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Failed to load session';
                 showAlert('danger', error);
             }
         });
@@ -766,9 +923,6 @@
                     document.getElementById('rerunBtn').disabled = false;
 
                     showAlert('success', `Document generated successfully! Processed ${response.files_processed} file(s).`);
-
-                    // Check status after generation
-                    checkDocumentStatus();
                 } else {
                     showAlert('danger', response.error);
                 }
@@ -1029,60 +1183,6 @@
         // Perform the refresh
         if (currentSession) {
             refreshContent(true); // true = silent mode (no alert)
-            checkDocumentStatus(); // Also check status on auto-refresh
-        }
-    }
-
-    function checkDocumentStatus() {
-        if (!currentSession) {
-            return;
-        }
-
-        $.ajax({
-            url: '{{ url_for("check_document_status") }}',
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                session_name: currentSession
-            }),
-            success: function(response) {
-                if (response.success) {
-                    updateStatusIndicator(response.status);
-                }
-            },
-            error: function(xhr) {
-                // Silently fail - don't show errors for status checks
-                console.error('Status check failed:', xhr);
-            }
-        });
-    }
-
-    function updateStatusIndicator(status) {
-        const indicator = document.getElementById('statusIndicator');
-
-        // Remove all previous classes
-        indicator.classList.remove('btn-warning', 'btn-success', 'btn-danger', 'btn-info');
-
-        switch(status) {
-            case 'preparation':
-                indicator.classList.add('btn-warning');
-                indicator.innerHTML = '<i class="fas fa-hourglass-start"></i> In Preparation';
-                break;
-            case 'waiting':
-                indicator.classList.add('btn-warning');
-                indicator.innerHTML = '<i class="fas fa-hourglass-half"></i> Waiting';
-                break;
-            case 'complete':
-                indicator.classList.add('btn-success');
-                indicator.innerHTML = '<i class="fas fa-check-circle"></i> Complete';
-                break;
-            case 'error':
-                indicator.classList.add('btn-danger');
-                indicator.innerHTML = '<i class="fas fa-times-circle"></i> Error';
-                break;
-            default:
-                indicator.classList.add('btn-warning');
-                indicator.innerHTML = '<i class="fas fa-hourglass-start"></i> In Preparation';
         }
     }
 
