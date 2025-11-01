@@ -254,7 +254,12 @@
                         Next refresh in: <strong><span id="countdownDisplay">30</span>s</strong>
                     </div>
                 </div>
-                <div class="autorefresh-settings">
+                <div class="d-flex align-items-center">
+                    <!-- Status Indicator Button -->
+                    <button class="btn btn-warning me-3" id="statusIndicator" disabled style="min-width: 140px;">
+                        <i class="fas fa-hourglass-start"></i> In Preparation
+                    </button>
+                    <div class="autorefresh-settings">
                     <label class="me-2 mb-0 small">Interval:</label>
                     <select class="form-select form-select-sm"
                             id="refreshInterval"
@@ -567,6 +572,9 @@
 
                     // Show success message
                     showAlert('success', response.message);
+
+                    // Check initial status
+                    checkDocumentStatus();
                 } else {
                     showAlert('danger', response.error);
                 }
@@ -758,6 +766,9 @@
                     document.getElementById('rerunBtn').disabled = false;
 
                     showAlert('success', `Document generated successfully! Processed ${response.files_processed} file(s).`);
+
+                    // Check status after generation
+                    checkDocumentStatus();
                 } else {
                     showAlert('danger', response.error);
                 }
@@ -1018,6 +1029,60 @@
         // Perform the refresh
         if (currentSession) {
             refreshContent(true); // true = silent mode (no alert)
+            checkDocumentStatus(); // Also check status on auto-refresh
+        }
+    }
+
+    function checkDocumentStatus() {
+        if (!currentSession) {
+            return;
+        }
+
+        $.ajax({
+            url: '{{ url_for("check_document_status") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_name: currentSession
+            }),
+            success: function(response) {
+                if (response.success) {
+                    updateStatusIndicator(response.status);
+                }
+            },
+            error: function(xhr) {
+                // Silently fail - don't show errors for status checks
+                console.error('Status check failed:', xhr);
+            }
+        });
+    }
+
+    function updateStatusIndicator(status) {
+        const indicator = document.getElementById('statusIndicator');
+
+        // Remove all previous classes
+        indicator.classList.remove('btn-warning', 'btn-success', 'btn-danger', 'btn-info');
+
+        switch(status) {
+            case 'preparation':
+                indicator.classList.add('btn-warning');
+                indicator.innerHTML = '<i class="fas fa-hourglass-start"></i> In Preparation';
+                break;
+            case 'waiting':
+                indicator.classList.add('btn-warning');
+                indicator.innerHTML = '<i class="fas fa-hourglass-half"></i> Waiting';
+                break;
+            case 'complete':
+                indicator.classList.add('btn-success');
+                indicator.innerHTML = '<i class="fas fa-check-circle"></i> Complete';
+                break;
+            case 'error':
+                indicator.classList.add('btn-danger');
+                indicator.innerHTML = '<i class="fas fa-times-circle"></i> Error';
+                break;
+            default:
+                indicator.classList.add('btn-warning');
+                indicator.innerHTML = '<i class="fas fa-hourglass-start"></i> In Preparation';
         }
     }
 

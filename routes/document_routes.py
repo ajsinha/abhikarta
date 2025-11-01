@@ -149,9 +149,24 @@ class DocumentRoutes:
 
             # Get uploaded files from inbox
             inbox_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen', session_name, 'inbox')
+            outbox_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen', session_name, 'outbox')
 
             if not os.path.exists(inbox_path):
                 return jsonify({'success': False, 'error': 'Session not found'}), 404
+
+            # Create "started" status file in outbox
+            try:
+                # Remove any existing status files first
+                for status_file in ['started', 'success', 'error']:
+                    status_path = os.path.join(outbox_path, status_file)
+                    if os.path.exists(status_path):
+                        os.remove(status_path)
+
+                # Create "started" file
+                with open(os.path.join(outbox_path, 'started'), 'w') as f:
+                    f.write('Document generation started')
+            except Exception as e:
+                pass  # Continue even if status file creation fails
 
             uploaded_files = [f for f in os.listdir(inbox_path) if os.path.isfile(os.path.join(inbox_path, f))]
 
@@ -165,6 +180,34 @@ class DocumentRoutes:
                 'template': template,
                 'files_processed': len(uploaded_files)
             })
+
+        @self.app.route('/api/document/status', methods=['POST'])
+        @self.login_required
+        def check_document_status():
+            """Check document generation status by looking for status files in outbox"""
+            user = self.user_registry.get_user(session['user_id'])
+            data = request.get_json()
+
+            session_name = data.get('session_name', '').strip()
+
+            if not session_name:
+                return jsonify({'success': False, 'error': 'Session name is required'}), 400
+
+            # Get outbox path
+            outbox_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen', session_name, 'outbox')
+
+            if not os.path.exists(outbox_path):
+                return jsonify({'success': True, 'status': 'preparation'}), 200
+
+            # Check for status files in priority order
+            if os.path.exists(os.path.join(outbox_path, 'error')):
+                return jsonify({'success': True, 'status': 'error'})
+            elif os.path.exists(os.path.join(outbox_path, 'success')):
+                return jsonify({'success': True, 'status': 'complete'})
+            elif os.path.exists(os.path.join(outbox_path, 'started')):
+                return jsonify({'success': True, 'status': 'waiting'})
+            else:
+                return jsonify({'success': True, 'status': 'preparation'})
 
         @self.app.route('/api/document/delete-file', methods=['POST'])
         @self.login_required
