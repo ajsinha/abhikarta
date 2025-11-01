@@ -9,12 +9,13 @@ import os
 import re
 from flask import session, render_template, request, jsonify
 from werkzeug.utils import secure_filename
+from routes.base_routes import BaseRoutes
 
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx', 'md', 'csv', 'json'}
 MAX_FILES = 10
 
 
-class DocumentRoutes:
+class DocumentRoutes(BaseRoutes):
     """Document generation routes handler"""
 
     def __init__(self, app, user_registry, login_required):
@@ -26,6 +27,8 @@ class DocumentRoutes:
             user_registry: User registry instance
             login_required: Login required decorator
         """
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.login_required = login_required
@@ -165,6 +168,42 @@ class DocumentRoutes:
                 'template': template,
                 'files_processed': len(uploaded_files)
             })
+
+        @self.app.route('/api/document/delete-file', methods=['POST'])
+        @self.login_required
+        def delete_file():
+            """Delete a file from the session inbox"""
+            user = self.user_registry.get_user(session['user_id'])
+            data = request.get_json()
+
+            session_name = data.get('session_name', '').strip()
+            filename = data.get('filename', '').strip()
+
+            if not session_name:
+                return jsonify({'success': False, 'error': 'Session name is required'}), 400
+
+            if not filename:
+                return jsonify({'success': False, 'error': 'Filename is required'}), 400
+
+            # Path to the file in inbox
+            inbox_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen', session_name, 'inbox')
+            file_path = os.path.join(inbox_path, secure_filename(filename))
+
+            if not os.path.exists(inbox_path):
+                return jsonify({'success': False, 'error': 'Session not found'}), 404
+
+            if not os.path.exists(file_path):
+                return jsonify({'success': False, 'error': 'File not found'}), 404
+
+            try:
+                # Delete the file
+                os.remove(file_path)
+                return jsonify({
+                    'success': True,
+                    'message': f'File "{filename}" deleted successfully'
+                })
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Failed to delete file: {str(e)}'}), 500
 
     def _allowed_file(self, filename):
         """Check if file extension is allowed"""

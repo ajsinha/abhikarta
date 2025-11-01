@@ -9,12 +9,14 @@ from flask import session, render_template, request, redirect, url_for, flash, j
 import uuid
 import json
 from datetime import datetime
+from routes.base_routes import BaseRoutes
 
-
-class PlannerRoutes:
+class PlannerRoutes(BaseRoutes):
     """Planner routes handler"""
     
     def __init__(self, app, user_registry, planner, tool_registry, agent_registry, dag_registry, orchestrator, get_db, login_required):
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.planner = planner

@@ -9,12 +9,14 @@ from flask import request, redirect, url_for, session, render_template, flash
 from functools import wraps
 from datetime import datetime
 import uuid
+from routes.base_routes import BaseRoutes
 
-
-class AuthRoutes:
+class AuthRoutes(BaseRoutes):
     """Authentication routes handler"""
 
     def __init__(self, app, user_registry, get_db):
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.get_db = get_db

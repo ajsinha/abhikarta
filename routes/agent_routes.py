@@ -6,12 +6,14 @@ Agent management, execution, and administration
 """
 
 from flask import session, render_template, request, redirect, url_for, flash, jsonify
+from routes.base_routes import BaseRoutes
 
-
-class AgentRoutes:
+class AgentRoutes(BaseRoutes):
     """Agent routes handler"""
     
     def __init__(self, app, user_registry, agent_registry, login_required):
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.agent_registry = agent_registry

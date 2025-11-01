@@ -10,9 +10,9 @@ from datetime import datetime
 import time
 import json
 import os
+from routes.base_routes import BaseRoutes
 
-
-class LLMRoutes:
+class LLMRoutes(BaseRoutes):
     """LLM management routes handler"""
 
     def __init__(self, app, llm_facade_class, login_required, admin_required):
@@ -25,6 +25,8 @@ class LLMRoutes:
             login_required: Login decorator
             admin_required: Admin decorator
         """
+        super().__init__()
+
         self.app = app
         self.LLMFacade = llm_facade_class
         self.login_required = login_required

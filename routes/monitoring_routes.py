@@ -6,12 +6,14 @@ System monitoring, statistics, and analytics
 """
 
 from flask import render_template, jsonify, session
+from routes.base_routes import BaseRoutes
 
-
-class MonitoringRoutes:
+class MonitoringRoutes(BaseRoutes):
     """Monitoring routes handler"""
 
     def __init__(self, app, user_registry, login_required, admin_required):
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.login_required = login_required

@@ -6,12 +6,14 @@ Human-In-The-Loop request management and approval
 """
 
 from flask import session, render_template, request, jsonify
+from routes.base_routes import BaseRoutes
 
-
-class HITLRoutes:
+class HITLRoutes(BaseRoutes):
     """HITL routes handler"""
     
     def __init__(self, app, user_registry, orchestrator, login_required):
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.orchestrator = orchestrator

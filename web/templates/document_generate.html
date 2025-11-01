@@ -52,6 +52,15 @@
     .file-item .remove-file {
         cursor: pointer;
         color: #dc3545;
+        transition: all 0.2s ease;
+        padding: 4px;
+        border-radius: 4px;
+    }
+
+    .file-item .remove-file:hover {
+        color: #fff;
+        background-color: #dc3545;
+        transform: scale(1.1);
     }
 
     .editor-container {
@@ -393,8 +402,8 @@
             fileItem.className = 'file-item';
             fileItem.innerHTML = `
                 <span><i class="fas fa-file"></i> ${file.name}</span>
-                <span class="remove-file" onclick="removeFile(${index})">
-                    <i class="fas fa-times"></i>
+                <span class="remove-file" onclick="removeFile(${index})" title="Delete this file from server">
+                    <i class="fas fa-times-circle"></i>
                 </span>
             `;
             fileList.appendChild(fileItem);
@@ -416,9 +425,44 @@
     }
 
     function removeFile(index) {
-        uploadedFiles.splice(index, 1);
-        updateFileList();
-        document.getElementById('submitBtn').disabled = uploadedFiles.length === 0;
+        if (!currentSession) {
+            alert('Session not found');
+            return;
+        }
+
+        const file = uploadedFiles[index];
+        const filename = file.name;
+
+        // Confirm deletion
+        if (!confirm(`Delete "${filename}"?`)) {
+            return;
+        }
+
+        // Call backend to delete the file
+        $.ajax({
+            url: '{{ url_for("delete_file") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                session_name: currentSession,
+                filename: filename
+            }),
+            success: function(response) {
+                if (response.success) {
+                    // Remove from local array
+                    uploadedFiles.splice(index, 1);
+                    updateFileList();
+                    document.getElementById('submitBtn').disabled = uploadedFiles.length === 0;
+                    showAlert('success', response.message);
+                } else {
+                    showAlert('danger', response.error);
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Failed to delete file';
+                showAlert('danger', error);
+            }
+        });
     }
 
     function generateDocument() {

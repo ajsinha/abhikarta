@@ -6,9 +6,9 @@ Workflow listing, monitoring, and status tracking
 """
 
 from flask import session, render_template, request, redirect, url_for, flash, jsonify
+from routes.base_routes import BaseRoutes
 
-
-class WorkflowRoutes:
+class WorkflowRoutes(BaseRoutes):
     """Workflow routes handler"""
 
     def __init__(self, app, user_registry, orchestrator, db_handler, login_required):
@@ -22,6 +22,8 @@ class WorkflowRoutes:
             db_handler: DatabaseCallHandler instance
             login_required: Login required decorator
         """
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.orchestrator = orchestrator

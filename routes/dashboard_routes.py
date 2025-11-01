@@ -6,8 +6,9 @@ Main dashboard with statistics and overview
 """
 
 from flask import session, render_template
+from routes.base_routes import BaseRoutes
 
-class DashboardRoutes:
+class DashboardRoutes(BaseRoutes):
     """Dashboard routes handler"""
 
     def __init__(self, app, user_registry, orchestrator, tool_registry, db_handler, login_required):
@@ -22,6 +23,8 @@ class DashboardRoutes:
             db_handler: DatabaseCallHandler instance
             login_required: Login required decorator
         """
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.orchestrator = orchestrator

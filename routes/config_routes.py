@@ -6,12 +6,14 @@ System configuration reload and management
 """
 
 from flask import session, jsonify
+from routes.base_routes import BaseRoutes
 
-
-class ConfigRoutes:
+class ConfigRoutes(BaseRoutes):
     """Configuration routes handler"""
     
     def __init__(self, app, user_registry, agent_registry, tool_registry, dag_registry, login_required):
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.agent_registry = agent_registry

@@ -6,12 +6,14 @@ User management for administrators
 """
 
 from flask import session, render_template, request, redirect, url_for, flash, jsonify
+from routes.base_routes import BaseRoutes
 
-
-class UserRoutes:
+class UserRoutes(BaseRoutes):
     """User management routes handler"""
     
     def __init__(self, app, user_registry, tool_registry, agent_registry, dag_registry, login_required):
+        super().__init__()
+
         self.app = app
         self.user_registry = user_registry
         self.tool_registry = tool_registry
