@@ -64,8 +64,8 @@ class DocumentRoutes:
                             file_count = 0
                             if os.path.exists(inbox_path):
                                 file_count = len([f for f in os.listdir(inbox_path)
-                                                  if os.path.isfile(os.path.join(inbox_path, f))
-                                                  and not f.startswith('.')])
+                                                if os.path.isfile(os.path.join(inbox_path, f))
+                                                and not f.startswith('.')])
 
                             # Get last modified time
                             modified_time = os.path.getmtime(item_path)
@@ -102,13 +102,11 @@ class DocumentRoutes:
 
             # Check if session name contains at least one alphabetic character
             if not re.search(r'[a-zA-Z]', session_name):
-                return jsonify(
-                    {'success': False, 'error': 'Session name must contain at least one alphabetic character'}), 400
+                return jsonify({'success': False, 'error': 'Session name must contain at least one alphabetic character'}), 400
 
             # Check if session name contains only alphanumerics and underscores
             if not re.match(r'^[a-zA-Z0-9_]+$', session_name):
-                return jsonify(
-                    {'success': False, 'error': 'Session name can only contain alphanumerics and underscores'}), 400
+                return jsonify({'success': False, 'error': 'Session name can only contain alphanumerics and underscores'}), 400
 
             # Create session folder structure
             base_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen', session_name)
@@ -129,8 +127,8 @@ class DocumentRoutes:
                 existing_files = []
                 if os.path.exists(inbox_path):
                     existing_files = [f for f in os.listdir(inbox_path)
-                                      if os.path.isfile(os.path.join(inbox_path, f))
-                                      and not f.startswith('.')]
+                                    if os.path.isfile(os.path.join(inbox_path, f))
+                                    and not f.startswith('.')]
 
                 message = f'Session "{session_name}" '
                 if session_exists and existing_files:
@@ -177,8 +175,7 @@ class DocumentRoutes:
             inbox_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen', session_name, 'inbox')
 
             if not os.path.exists(inbox_path):
-                return jsonify(
-                    {'success': False, 'error': 'Session folder does not exist. Please create a session first.'}), 400
+                return jsonify({'success': False, 'error': 'Session folder does not exist. Please create a session first.'}), 400
 
             uploaded_files = []
 
@@ -310,6 +307,171 @@ class DocumentRoutes:
                 'template': template,
                 'message': 'Document regenerated (current implementation uses same template)'
             })
+
+        @self.app.route('/api/document/download-word', methods=['POST'])
+        @self.login_required
+        def download_word():
+            """Convert markdown content to Word document and return as download"""
+            from flask import send_file
+            import tempfile
+            from io import BytesIO
+
+            user = self.user_registry.get_user(session['user_id'])
+            data = request.get_json()
+
+            markdown_content = data.get('content', '').strip()
+            filename = data.get('filename', 'document')
+
+            if not markdown_content:
+                return jsonify({'success': False, 'error': 'No content provided'}), 400
+
+            try:
+                # Try to use pypandoc if available (best quality conversion)
+                try:
+                    import pypandoc
+
+                    # Create temporary markdown file
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as md_file:
+                        md_file.write(markdown_content)
+                        md_path = md_file.name
+
+                    # Create temporary output file
+                    with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as docx_file:
+                        docx_path = docx_file.name
+
+                    # Convert using pandoc
+                    pypandoc.convert_file(md_path, 'docx', outputfile=docx_path)
+
+                    # Clean up markdown file
+                    os.unlink(md_path)
+
+                    # Return the Word document
+                    return send_file(
+                        docx_path,
+                        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        as_attachment=True,
+                        download_name=f'{filename}.docx'
+                    )
+
+                except (ImportError, RuntimeError):
+                    # Fallback to python-docx with markdown parsing
+                    from docx import Document
+                    from docx.shared import Pt, Inches
+                    from docx.enum.text import WD_ALIGN_PARAGRAPH
+                    import re
+
+                    doc = Document()
+
+                    # Process markdown line by line
+                    lines = markdown_content.split('\n')
+                    i = 0
+                    while i < len(lines):
+                        line = lines[i].rstrip()
+
+                        if not line:
+                            i += 1
+                            continue
+
+                        # Headers
+                        if line.startswith('# '):
+                            doc.add_heading(line[2:], level=1)
+                        elif line.startswith('## '):
+                            doc.add_heading(line[3:], level=2)
+                        elif line.startswith('### '):
+                            doc.add_heading(line[4:], level=3)
+                        elif line.startswith('#### '):
+                            doc.add_heading(line[5:], level=4)
+
+                        # Bullet lists
+                        elif line.startswith('- ') or line.startswith('* '):
+                            doc.add_paragraph(line[2:], style='List Bullet')
+
+                        # Numbered lists
+                        elif re.match(r'^\d+\.\s', line):
+                            text = re.sub(r'^\d+\.\s', '', line)
+                            doc.add_paragraph(text, style='List Number')
+
+                        # Tables (basic support)
+                        elif line.startswith('|') and i + 1 < len(lines) and lines[i + 1].startswith('|'):
+                            # Parse table
+                            table_lines = []
+                            while i < len(lines) and lines[i].startswith('|'):
+                                table_lines.append(lines[i])
+                                i += 1
+
+                            if len(table_lines) > 2:  # At least header + separator + one row
+                                # Extract cells
+                                rows = []
+                                for tline in table_lines:
+                                    cells = [cell.strip() for cell in tline.split('|')[1:-1]]
+                                    # Skip separator line
+                                    if not all(c.replace('-', '').replace(':', '').strip() == '' for c in cells):
+                                        rows.append(cells)
+
+                                if rows:
+                                    # Create table
+                                    table = doc.add_table(rows=len(rows), cols=len(rows[0]))
+                                    table.style = 'Light Grid Accent 1'
+
+                                    for row_idx, row_cells in enumerate(rows):
+                                        for col_idx, cell_text in enumerate(row_cells):
+                                            table.rows[row_idx].cells[col_idx].text = cell_text
+
+                            continue  # Already incremented i
+
+                        # Horizontal rules
+                        elif line.startswith('---') or line.startswith('***'):
+                            doc.add_paragraph()
+                            p = doc.add_paragraph()
+                            p.add_run('_' * 50)
+                            doc.add_paragraph()
+
+                        # Code blocks
+                        elif line.startswith('```'):
+                            i += 1
+                            code_lines = []
+                            while i < len(lines) and not lines[i].startswith('```'):
+                                code_lines.append(lines[i])
+                                i += 1
+
+                            if code_lines:
+                                p = doc.add_paragraph('\n'.join(code_lines))
+                                p.style = 'No Spacing'
+                                run = p.runs[0]
+                                run.font.name = 'Courier New'
+                                run.font.size = Pt(9)
+
+                        # Bold text
+                        elif '**' in line:
+                            p = doc.add_paragraph()
+                            parts = re.split(r'(\*\*[^*]+\*\*)', line)
+                            for part in parts:
+                                if part.startswith('**') and part.endswith('**'):
+                                    run = p.add_run(part[2:-2])
+                                    run.bold = True
+                                else:
+                                    p.add_run(part)
+
+                        # Regular paragraph
+                        else:
+                            doc.add_paragraph(line)
+
+                        i += 1
+
+                    # Save to BytesIO
+                    docx_io = BytesIO()
+                    doc.save(docx_io)
+                    docx_io.seek(0)
+
+                    return send_file(
+                        docx_io,
+                        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        as_attachment=True,
+                        download_name=f'{filename}.docx'
+                    )
+
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Conversion failed: {str(e)}'}), 500
 
     def _allowed_file(self, filename):
         """Check if file extension is allowed"""

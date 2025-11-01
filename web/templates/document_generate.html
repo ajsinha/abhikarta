@@ -1076,19 +1076,67 @@
             return;
         }
 
-        // For now, download as markdown file
-        // In a real implementation, you would convert to Word format on the backend
-        const blob = new Blob([content], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${currentSession || 'document'}_generated.md`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Get filename from session or use default
+        const filename = currentSession || 'document';
 
-        showAlert('info', 'Document downloaded as Markdown. Word conversion feature coming soon!');
+        // Show loading state
+        const downloadBtn = document.getElementById('downloadBtn');
+        const originalText = downloadBtn.innerHTML;
+        downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Converting...';
+        downloadBtn.disabled = true;
+
+        // Call backend to convert to Word
+        $.ajax({
+            url: '{{ url_for("download_word") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                content: content,
+                filename: filename
+            }),
+            xhrFields: {
+                responseType: 'blob'  // Important for binary data
+            },
+            success: function(blob) {
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${filename}.docx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                // Restore button
+                downloadBtn.innerHTML = originalText;
+                downloadBtn.disabled = false;
+
+                showAlert('success', 'Document downloaded as Word (.docx)');
+            },
+            error: function(xhr) {
+                // Try to read error message from blob
+                if (xhr.responseJSON) {
+                    showAlert('danger', xhr.responseJSON.error || 'Download failed');
+                } else {
+                    // Convert blob to text to read error
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        try {
+                            const error = JSON.parse(reader.result);
+                            showAlert('danger', error.error || 'Download failed');
+                        } catch (e) {
+                            showAlert('danger', 'Download failed. Please try again.');
+                        }
+                    };
+                    reader.readAsText(xhr.response);
+                }
+
+                // Restore button
+                downloadBtn.innerHTML = originalText;
+                downloadBtn.disabled = false;
+            }
+        });
     }
 
     // Auto-refresh functions
