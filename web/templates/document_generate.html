@@ -562,6 +562,16 @@
         // Load existing sessions on page load
         loadExistingSessions();
 
+        // Check for session parameter in URL and auto-load if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionParam = urlParams.get('session');
+        if (sessionParam) {
+            // Auto-load the session after a short delay to ensure dropdown is populated
+            setTimeout(function() {
+                autoLoadSession(sessionParam);
+            }, 500);
+        }
+
         // Enable/disable load and delete buttons based on dropdown selection
         document.getElementById('existingSessionsDropdown').addEventListener('change', function() {
             const loadBtn = document.getElementById('loadSessionBtn');
@@ -744,6 +754,72 @@
 
                     // Show success message
                     showAlert('success', response.message);
+                } else {
+                    showAlert('danger', response.error);
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Failed to load session';
+                showAlert('danger', error);
+            }
+        });
+    }
+
+    function autoLoadSession(sessionName) {
+        // Automatically load a session (called from URL parameter)
+        $.ajax({
+            url: '{{ url_for("create_document_session") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ session_name: sessionName }),
+            success: function(response) {
+                if (response.success) {
+                    currentSession = sessionName;
+
+                    // Update UI
+                    document.getElementById('sessionNameInput').value = sessionName;
+                    document.getElementById('activeSessionName').textContent = sessionName;
+                    document.getElementById('sessionInfo').classList.remove('d-none');
+                    document.getElementById('sessionNameInput').disabled = true;
+                    document.getElementById('createSessionBtn').disabled = true;
+
+                    // Disable the dropdown and load button
+                    const dropdown = document.getElementById('existingSessionsDropdown');
+                    dropdown.value = sessionName;
+                    dropdown.disabled = true;
+                    document.getElementById('loadSessionBtn').disabled = true;
+                    document.getElementById('deleteSessionBtn').disabled = true;
+
+                    // Handle existing files if session already existed
+                    if (response.existing_files && response.existing_files.length > 0) {
+                        // Clear current file list
+                        uploadedFiles = [];
+
+                        // Add existing files as File-like objects for display
+                        response.existing_files.forEach(filename => {
+                            uploadedFiles.push({
+                                name: filename,
+                                size: 0,
+                                type: '',
+                                isExisting: true
+                            });
+                        });
+
+                        // Update the UI
+                        updateFileList();
+                        updateFileCounter();
+
+                        // Enable submit button since there are already files
+                        document.getElementById('submitBtn').disabled = false;
+                    }
+
+                    // Show success message
+                    showAlert('success', `Session "${sessionName}" loaded successfully`);
+
+                    // Refresh content if there are outbox files
+                    setTimeout(function() {
+                        refreshContent(true); // Silent refresh
+                    }, 1000);
                 } else {
                     showAlert('danger', response.error);
                 }

@@ -41,6 +41,13 @@ class DocumentRoutes:
             user = self.user_registry.get_user(session['user_id'])
             return render_template('document_generate.html', user=user)
 
+        @self.app.route('/document-sessions')
+        @self.login_required
+        def document_sessions():
+            """Document sessions management page"""
+            user = self.user_registry.get_user(session['user_id'])
+            return render_template('document_sessions.html', user=user)
+
         @self.app.route('/api/document/list-sessions', methods=['GET'])
         @self.login_required
         def list_document_sessions():
@@ -77,6 +84,74 @@ class DocumentRoutes:
                             })
 
                     # Sort by modified time (most recent first)
+                    sessions.sort(key=lambda x: x['modified_time'], reverse=True)
+
+                return jsonify({
+                    'success': True,
+                    'sessions': sessions,
+                    'count': len(sessions)
+                })
+
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Failed to list sessions: {str(e)}'}), 500
+
+        @self.app.route('/api/document/list-sessions-detailed', methods=['GET'])
+        @self.login_required
+        def api_list_document_sessions_detailed():
+            """List all document generation sessions with detailed file information"""
+            user = self.user_registry.get_user(session['user_id'])
+
+            # Path to user's docgen folder
+            docgen_path = os.path.join('data', 'uploads', str(user.user_id), 'docgen')
+
+            try:
+                sessions = []
+
+                # Check if docgen folder exists
+                if os.path.exists(docgen_path):
+                    # Get all directories in docgen folder
+                    for item in os.listdir(docgen_path):
+                        item_path = os.path.join(docgen_path, item)
+                        if os.path.isdir(item_path):
+                            session_info = {
+                                'name': item,
+                                'created_time': os.path.getctime(item_path),
+                                'modified_time': os.path.getmtime(item_path),
+                                'inbox_files': [],
+                                'outbox_files': []
+                            }
+
+                            # Get inbox files
+                            inbox_path = os.path.join(item_path, 'inbox')
+                            if os.path.exists(inbox_path):
+                                for filename in os.listdir(inbox_path):
+                                    file_path = os.path.join(inbox_path, filename)
+                                    if os.path.isfile(file_path) and not filename.startswith('.'):
+                                        session_info['inbox_files'].append({
+                                            'name': filename,
+                                            'size': os.path.getsize(file_path),
+                                            'modified_time': os.path.getmtime(file_path)
+                                        })
+
+                            # Get outbox files
+                            outbox_path = os.path.join(item_path, 'outbox')
+                            if os.path.exists(outbox_path):
+                                for filename in os.listdir(outbox_path):
+                                    file_path = os.path.join(outbox_path, filename)
+                                    if os.path.isfile(file_path) and not filename.startswith('.'):
+                                        session_info['outbox_files'].append({
+                                            'name': filename,
+                                            'size': os.path.getsize(file_path),
+                                            'modified_time': os.path.getmtime(file_path)
+                                        })
+
+                            # Sort files by modification time (most recent first)
+                            session_info['inbox_files'].sort(key=lambda x: x['modified_time'], reverse=True)
+                            session_info['outbox_files'].sort(key=lambda x: x['modified_time'], reverse=True)
+
+                            sessions.append(session_info)
+
+                    # Sort sessions by modified time (most recent first)
                     sessions.sort(key=lambda x: x['modified_time'], reverse=True)
 
                 return jsonify({
