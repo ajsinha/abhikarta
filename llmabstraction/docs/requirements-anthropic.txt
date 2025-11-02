@@ -1,0 +1,2 @@
+# Requirements for Anthropic Direct API only
+anthropic>=0.34.0

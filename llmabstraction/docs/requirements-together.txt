@@ -1,0 +1,2 @@
+# Requirements for Together AI only
+together>=1.0.0

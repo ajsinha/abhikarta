@@ -1,0 +1,2 @@
+# Requirements for OpenAI only
+openai>=1.0.0
