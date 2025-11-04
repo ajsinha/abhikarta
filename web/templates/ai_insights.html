@@ -1,0 +1,711 @@
+{% extends "base.html" %}
+
+{% block title %}AI Insights{% endblock %}
+
+{% block extra_head %}
+<!-- Marked.js for Markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+    .insights-container {
+        display: flex;
+        gap: 20px;
+        height: calc(100vh - 250px);
+    }
+
+    .insights-left {
+        flex: 0 0 35%;
+        overflow-y: auto;
+    }
+
+    .insights-right {
+        flex: 0 0 65%;
+        overflow-y: auto;
+    }
+
+    .table-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        gap: 15px;
+    }
+
+    .search-box {
+        flex: 1;
+        max-width: 300px;
+    }
+
+    .insights-table {
+        font-size: 0.9rem;
+    }
+
+    .insights-table th {
+        cursor: pointer;
+        user-select: none;
+        position: relative;
+    }
+
+    .insights-table th:hover {
+        background-color: #f8f9fa;
+    }
+
+    .insights-table th.sortable::after {
+        content: '⇅';
+        position: absolute;
+        right: 8px;
+        opacity: 0.3;
+    }
+
+    .insights-table th.sort-asc::after {
+        content: '↑';
+        opacity: 1;
+    }
+
+    .insights-table th.sort-desc::after {
+        content: '↓';
+        opacity: 1;
+    }
+
+    .insights-table tbody tr {
+        cursor: pointer;
+    }
+
+    .insights-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    .insights-table tbody tr.selected {
+        background-color: #e7f3ff;
+    }
+
+    .pagination-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 15px;
+    }
+
+    .markdown-viewer {
+        padding: 20px;
+        background-color: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        min-height: 400px;
+    }
+
+    .markdown-viewer h1 {
+        color: #0d6efd;
+        border-bottom: 2px solid #0d6efd;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+
+    .markdown-viewer h2 {
+        color: #495057;
+        margin-top: 30px;
+        margin-bottom: 15px;
+    }
+
+    .markdown-viewer h3 {
+        color: #6c757d;
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+
+    .markdown-viewer table {
+        width: 100%;
+        margin: 20px 0;
+    }
+
+    .markdown-viewer table th {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border: 1px solid #dee2e6;
+    }
+
+    .markdown-viewer table td {
+        padding: 10px;
+        border: 1px solid #dee2e6;
+    }
+
+    .markdown-viewer blockquote {
+        border-left: 4px solid #0d6efd;
+        padding-left: 20px;
+        margin: 20px 0;
+        color: #6c757d;
+        font-style: italic;
+    }
+
+    .markdown-viewer code {
+        background-color: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+    }
+
+    .markdown-viewer pre {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+    }
+
+    .markdown-viewer pre code {
+        background-color: transparent;
+        padding: 0;
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 400px;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 20px;
+        opacity: 0.3;
+    }
+
+    @media (max-width: 1200px) {
+        .insights-container {
+            flex-direction: column;
+            height: auto;
+        }
+
+        .insights-left,
+        .insights-right {
+            flex: 1 1 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1><i class="fas fa-lightbulb"></i> AI Insights</h1>
+        <p class="text-muted">View and explore AI-generated insights from your workflows and analyses</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center justify-content-end">
+                    <label class="form-check-label me-2 mb-0" for="autoRefreshToggle">
+                        <i class="fas fa-sync-alt"></i> Auto-refresh
+                    </label>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
+                    </div>
+                    <span class="badge bg-primary ms-2" id="refreshCountdown">30s</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="insights-container">
+    <!-- Left Panel: Insights List -->
+    <div class="insights-left">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-list"></i> Your Insights</h5>
+            </div>
+            <div class="card-body">
+                <!-- Table Controls -->
+                <div class="table-controls">
+                    <div class="d-flex align-items-center gap-2">
+                        <label for="perPageSelect" class="mb-0 small">Show:</label>
+                        <select id="perPageSelect" class="form-select form-select-sm" style="width: auto;">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="50">50</option>
+                            <option value="-1">All</option>
+                        </select>
+                    </div>
+
+                    <div class="search-box">
+                        <input type="text"
+                               id="searchInput"
+                               class="form-control form-control-sm"
+                               placeholder="Search insights...">
+                    </div>
+                </div>
+
+                <!-- Insights Table -->
+                <div class="table-responsive">
+                    <table class="table table-hover insights-table" id="insightsTable">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="category">
+                                    Category
+                                </th>
+                                <th class="sortable" data-column="document">
+                                    Document
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="insightsTableBody">
+                            <tr>
+                                <td colspan="2" class="text-center">
+                                    <div class="spinner-border spinner-border-sm" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading insights...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Controls -->
+                <div class="pagination-controls">
+                    <div class="small text-muted" id="paginationInfo">
+                        Showing 0 to 0 of 0 entries
+                    </div>
+                    <nav aria-label="Insights pagination">
+                        <ul class="pagination pagination-sm mb-0" id="paginationLinks">
+                            <li class="page-item disabled">
+                                <a class="page-link" href="#" tabindex="-1">Previous</a>
+                            </li>
+                            <li class="page-item disabled">
+                                <a class="page-link" href="#">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel: Markdown Viewer -->
+    <div class="insights-right">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-file-alt"></i> Insight Details</h5>
+                <div>
+                    <button id="deleteButton" class="btn btn-danger btn-sm me-2" style="display: none;" onclick="deleteInsight()">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                    <button id="exportButton" class="btn btn-light btn-sm" style="display: none;" onclick="exportInsight()">
+                        <i class="fas fa-download"></i> Export and Download
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="markdownViewer" class="markdown-viewer">
+                    <div class="empty-state">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <p class="mb-0">Select an insight from the left panel to view its contents</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // State management
+    let currentPage = 1;
+    let perPage = 10;
+    let searchTerm = '';
+    let sortBy = 'category';
+    let sortOrder = 'asc';
+    let selectedInsightId = null;
+    let selectedDocumentName = null;  // Track document name for export
+    let selectedCategory = null;  // Track category (Global or User)
+    let allInsights = [];
+
+    // Auto-refresh state
+    let autoRefreshEnabled = true;
+    let refreshCountdown = 30;
+    let refreshInterval = null;
+    let countdownInterval = null;
+
+    // Initialize on page load
+    $(document).ready(function() {
+        loadInsights();
+
+        // Start auto-refresh
+        startAutoRefresh();
+
+        // Auto-refresh toggle handler
+        $('#autoRefreshToggle').on('change', function() {
+            autoRefreshEnabled = $(this).is(':checked');
+            if (autoRefreshEnabled) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+
+        // Event listeners
+        $('#perPageSelect').on('change', function() {
+            perPage = parseInt($(this).val());
+            currentPage = 1;
+            loadInsights();
+        });
+
+        $('#searchInput').on('input', debounce(function() {
+            searchTerm = $(this).val();
+            currentPage = 1;
+            loadInsights();
+        }, 300));
+
+        // Sort functionality
+        $('.sortable').on('click', function() {
+            const column = $(this).data('column');
+            if (sortBy === column) {
+                sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortBy = column;
+                sortOrder = 'asc';
+            }
+            updateSortIndicators();
+            loadInsights();
+        });
+    });
+
+    // Load insights from API
+    function loadInsights() {
+        $.ajax({
+            url: '{{ url_for("api_get_insights") }}',
+            method: 'GET',
+            data: {
+                page: currentPage,
+                per_page: perPage,
+                search: searchTerm,
+                sort_by: sortBy,
+                sort_order: sortOrder
+            },
+            success: function(response) {
+                if (response.success) {
+                    allInsights = response.insights;
+                    renderInsightsTable(response);
+                    renderPagination(response);
+                }
+            },
+            error: function() {
+                showError('Failed to load insights');
+            }
+        });
+    }
+
+    // Render insights table
+    function renderInsightsTable(response) {
+        const tbody = $('#insightsTableBody');
+        tbody.empty();
+
+        if (response.insights.length === 0) {
+            tbody.append(`
+                <tr>
+                    <td colspan="2" class="text-center text-muted">
+                        <i class="fas fa-inbox"></i> No insights found
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        response.insights.forEach(function(insight) {
+            const row = $(`
+                <tr data-insight-id="${insight.id}"
+                    data-document-name="${escapeHtml(insight.document)}"
+                    data-category="${escapeHtml(insight.category)}"
+                    ${selectedInsightId === insight.id ? 'class="selected"' : ''}>
+                    <td>${escapeHtml(insight.category)}</td>
+                    <td>${escapeHtml(insight.document)}</td>
+                </tr>
+            `);
+
+            row.on('click', function() {
+                const insightId = $(this).data('insight-id');
+                const documentName = $(this).data('document-name');
+                const category = $(this).data('category');
+                loadInsightContent(insightId, documentName, category);
+                $('#insightsTableBody tr').removeClass('selected');
+                $(this).addClass('selected');
+            });
+
+            tbody.append(row);
+        });
+    }
+
+    // Render pagination
+    function renderPagination(response) {
+        const start = response.total === 0 ? 0 : (response.page - 1) * response.per_page + 1;
+        const end = Math.min(response.page * response.per_page, response.total);
+
+        $('#paginationInfo').text(`Showing ${start} to ${end} of ${response.total} entries`);
+
+        const paginationLinks = $('#paginationLinks');
+        paginationLinks.empty();
+
+        // Previous button
+        const prevDisabled = response.page <= 1 ? 'disabled' : '';
+        paginationLinks.append(`
+            <li class="page-item ${prevDisabled}">
+                <a class="page-link" href="#" data-page="${response.page - 1}">Previous</a>
+            </li>
+        `);
+
+        // Page numbers
+        const maxPages = 5;
+        let startPage = Math.max(1, response.page - Math.floor(maxPages / 2));
+        let endPage = Math.min(response.total_pages, startPage + maxPages - 1);
+
+        if (endPage - startPage < maxPages - 1) {
+            startPage = Math.max(1, endPage - maxPages + 1);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const active = i === response.page ? 'active' : '';
+            paginationLinks.append(`
+                <li class="page-item ${active}">
+                    <a class="page-link" href="#" data-page="${i}">${i}</a>
+                </li>
+            `);
+        }
+
+        // Next button
+        const nextDisabled = response.page >= response.total_pages ? 'disabled' : '';
+        paginationLinks.append(`
+            <li class="page-item ${nextDisabled}">
+                <a class="page-link" href="#" data-page="${response.page + 1}">Next</a>
+            </li>
+        `);
+
+        // Click handlers
+        paginationLinks.find('a').on('click', function(e) {
+            e.preventDefault();
+            if (!$(this).parent().hasClass('disabled') && !$(this).parent().hasClass('active')) {
+                currentPage = parseInt($(this).data('page'));
+                loadInsights();
+            }
+        });
+    }
+
+    // Load insight content
+    function loadInsightContent(insightId, documentName, category) {
+        selectedInsightId = insightId;
+        selectedDocumentName = documentName;
+        selectedCategory = category;
+
+        // Hide buttons while loading
+        $('#exportButton').hide();
+        $('#deleteButton').hide();
+
+        $('#markdownViewer').html(`
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted">Loading insight content...</p>
+            </div>
+        `);
+
+        $.ajax({
+            url: `/api/insight/${insightId}`,
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const html = marked.parse(response.content);
+                    $('#markdownViewer').html(html);
+                    // Show export button after content is loaded
+                    $('#exportButton').show();
+                    // Show delete button only for User category
+                    if (category === 'User') {
+                        $('#deleteButton').show();
+                    }
+                }
+            },
+            error: function() {
+                $('#markdownViewer').html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Failed to load insight content
+                    </div>
+                `);
+                $('#exportButton').hide();
+                $('#deleteButton').hide();
+            }
+        });
+    }
+
+    // Update sort indicators
+    function updateSortIndicators() {
+        $('.sortable').removeClass('sort-asc sort-desc');
+        $(`.sortable[data-column="${sortBy}"]`).addClass(`sort-${sortOrder}`);
+    }
+
+    // Export insight to Word document
+    function exportInsight() {
+        if (!selectedInsightId) {
+            showError('No insight selected');
+            return;
+        }
+
+        // Show loading state on button
+        const btn = $('#exportButton');
+        const originalHtml = btn.html();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Exporting...');
+
+        // Create a form and submit to trigger download
+        const form = $('<form>', {
+            method: 'GET',
+            action: `/api/export-insight/${selectedInsightId}`,
+            target: '_blank'
+        });
+        $('body').append(form);
+        form.submit();
+        form.remove();
+
+        // Reset button after a delay
+        setTimeout(function() {
+            btn.prop('disabled', false).html(originalHtml);
+            showSuccess(`Exported: ${selectedDocumentName}`);
+        }, 1000);
+    }
+
+    // Delete insight
+    function deleteInsight() {
+        if (!selectedInsightId) {
+            showError('No insight selected');
+            return;
+        }
+
+        if (!selectedCategory || selectedCategory !== 'User') {
+            showError('Only user insights can be deleted');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to delete "${selectedDocumentName}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        // Show loading state on button
+        const btn = $('#deleteButton');
+        const originalHtml = btn.html();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Deleting...');
+
+        $.ajax({
+            url: `/api/delete-insight/${selectedInsightId}`,
+            method: 'DELETE',
+            success: function(response) {
+                if (response.success) {
+                    showSuccess('Insight deleted successfully');
+                    // Clear the viewer
+                    $('#markdownViewer').html(`
+                        <div class="empty-state">
+                            <i class="fas fa-mouse-pointer"></i>
+                            <p class="mb-0">Select an insight from the left panel to view its contents</p>
+                        </div>
+                    `);
+                    $('#exportButton').hide();
+                    $('#deleteButton').hide();
+                    selectedInsightId = null;
+                    selectedDocumentName = null;
+                    selectedCategory = null;
+                    // Reload the insights list
+                    loadInsights();
+                } else {
+                    showError(response.error || 'Failed to delete insight');
+                    btn.prop('disabled', false).html(originalHtml);
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Failed to delete insight';
+                showError(error);
+                btn.prop('disabled', false).html(originalHtml);
+            }
+        });
+    }
+
+    // Auto-refresh functions
+    function startAutoRefresh() {
+        if (!autoRefreshEnabled) return;
+
+        // Reset countdown
+        refreshCountdown = 30;
+        $('#refreshCountdown').text(refreshCountdown + 's');
+
+        // Clear existing intervals
+        if (countdownInterval) clearInterval(countdownInterval);
+        if (refreshInterval) clearInterval(refreshInterval);
+
+        // Start countdown
+        countdownInterval = setInterval(function() {
+            refreshCountdown--;
+            $('#refreshCountdown').text(refreshCountdown + 's');
+
+            if (refreshCountdown <= 0) {
+                // Reload insights
+                loadInsights();
+                // Reset countdown
+                refreshCountdown = 30;
+                $('#refreshCountdown').text(refreshCountdown + 's');
+            }
+        }, 1000);
+    }
+
+    function stopAutoRefresh() {
+        if (countdownInterval) clearInterval(countdownInterval);
+        if (refreshInterval) clearInterval(refreshInterval);
+        $('#refreshCountdown').text('Off');
+    }
+
+    // Utility functions
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    function showError(message) {
+        const alert = $(`
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `);
+        $('.container-fluid.mt-3').prepend(alert);
+        setTimeout(() => alert.alert('close'), 5000);
+    }
+
+    function showSuccess(message) {
+        const alert = $(`
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle"></i> ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `);
+        $('.container-fluid.mt-3').prepend(alert);
+        setTimeout(() => alert.alert('close'), 3000);
+    }
+
+    // Initialize sort indicators
+    updateSortIndicators();
+</script>
+{% endblock %}

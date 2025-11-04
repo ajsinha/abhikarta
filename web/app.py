@@ -34,6 +34,7 @@ from routes.monitoring_routes import MonitoringRoutes
 from routes.config_routes import ConfigRoutes
 from routes.llm_routes import LLMRoutes
 from routes.document_routes import DocumentRoutes
+from routes.view_routes import ViewRoutes  # ============ NEW IMPORT ============
 
 from llm.llm_facade import LLMFacade
 
@@ -92,8 +93,8 @@ class AbhikartaApp:
 
     def _load_configuration(self):
         """Load application configuration"""
-        self.props = PropertiesConfigurator()
-        self.props.load_properties(self.config_file)
+        self.props = PropertiesConfigurator(self.config_file)
+
 
         # Store system name for easy access
         self.system_name = self.props.get_system_name()
@@ -179,6 +180,12 @@ class AbhikartaApp:
         document_routes = DocumentRoutes(
             self.app, self.user_registry, login_required
         )
+
+        # ============ NEW: INITIALIZE VIEW ROUTES ============
+        view_routes = ViewRoutes(
+            self.app, self.user_registry, login_required
+        )
+        # =====================================================
 
     def get_app(self):
         """

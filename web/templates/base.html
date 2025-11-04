@@ -67,6 +67,16 @@
                             <li><a class="dropdown-item" href="{{ url_for('document_sessions') }}"><i class="fas fa-folder-open"></i> Document Sessions</a></li>
                         </ul>
                     </li>
+                    <!-- ============ NEW: VIEW MENU ITEM ============ -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="viewDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-eye"></i> View
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('ai_insights') }}"><i class="fas fa-lightbulb"></i> AI Insights</a></li>
+                        </ul>
+                    </li>
+                    <!-- ============================================= -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="manageDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-cog"></i> Manage
