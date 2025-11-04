@@ -11,7 +11,9 @@ import os
 import tempfile
 import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+import threading
+import time
 
 
 class ViewRoutes(BaseRoutes):
@@ -22,7 +24,20 @@ class ViewRoutes(BaseRoutes):
         self.app = app
         self.user_registry = user_registry
         self.login_required = login_required
+
+        # Cleanup configuration
+        # Get retention days from environment variable or use default
+        self.retention_days = int(os.environ.get('AI_INSIGHTS_RETENTION_DAYS', '15'))
+        self.cleanup_interval_hours = int(os.environ.get('AI_INSIGHTS_CLEANUP_INTERVAL_HOURS', '24'))
+
+        print(f"AI Insights Cleanup Monitor Configuration:")
+        print(f"  - Retention period: {self.retention_days} days")
+        print(f"  - Cleanup interval: {self.cleanup_interval_hours} hours")
+
         self.register_routes()
+
+        # Start the cleanup monitor in a background thread
+        self._start_cleanup_monitor()
 
     def register_routes(self):
         """Register all view routes"""
@@ -334,3 +349,207 @@ class ViewRoutes(BaseRoutes):
                     'success': False,
                     'error': f'Error deleting file: {str(e)}'
                 }), 500
+
+        @self.app.route('/api/cleanup-insights', methods=['POST'])
+        @self.login_required
+        def api_manual_cleanup():
+            """API endpoint to manually trigger cleanup of old insights"""
+            from flask import session
+
+            # Check if user is admin (optional - remove if you want all users to trigger cleanup)
+            user = self.user_registry.get_user(session.get('user_id'))
+            if not user or not hasattr(user, 'is_admin') or not user.is_admin():
+                return jsonify({
+                    'success': False,
+                    'error': 'Admin access required'
+                }), 403
+
+            try:
+                deleted_count = self._cleanup_old_insights()
+                return jsonify({
+                    'success': True,
+                    'message': f'Cleanup completed: {deleted_count} file(s) deleted',
+                    'deleted_count': deleted_count,
+                    'retention_days': self.retention_days
+                })
+            except Exception as e:
+                print(f"Error during manual cleanup: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+
+        @self.app.route('/api/cleanup-status')
+        @self.login_required
+        def api_cleanup_status():
+            """API endpoint to get cleanup configuration and statistics"""
+            from flask import session
+
+            user = self.user_registry.get_user(session.get('user_id'))
+
+            try:
+                # Count total files
+                base_dir = 'data/ai_insights'
+                total_files = 0
+                old_files = 0
+                cutoff_time = datetime.now() - timedelta(days=self.retention_days)
+
+                # Count files in global directory
+                global_dir = os.path.join(base_dir, 'all')
+                if os.path.exists(global_dir):
+                    for filename in os.listdir(global_dir):
+                        if filename.endswith('.md'):
+                            total_files += 1
+                            filepath = os.path.join(global_dir, filename)
+                            file_mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
+                            if file_mtime < cutoff_time:
+                                old_files += 1
+
+                # Count files in user directories
+                users_dir = os.path.join(base_dir, 'users')
+                if os.path.exists(users_dir):
+                    for user_folder in os.listdir(users_dir):
+                        user_path = os.path.join(users_dir, user_folder)
+                        if os.path.isdir(user_path):
+                            for filename in os.listdir(user_path):
+                                if filename.endswith('.md'):
+                                    total_files += 1
+                                    filepath = os.path.join(user_path, filename)
+                                    file_mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
+                                    if file_mtime < cutoff_time:
+                                        old_files += 1
+
+                return jsonify({
+                    'success': True,
+                    'retention_days': self.retention_days,
+                    'cleanup_interval_hours': self.cleanup_interval_hours,
+                    'total_insights': total_files,
+                    'old_insights': old_files,
+                    'cutoff_date': cutoff_time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'can_trigger_cleanup': user and hasattr(user, 'is_admin') and user.is_admin()
+                })
+            except Exception as e:
+                print(f"Error getting cleanup status: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+
+    def _start_cleanup_monitor(self):
+        """Start the background cleanup monitor thread"""
+        def cleanup_worker():
+            while True:
+                try:
+                    # Wait for the configured interval before first cleanup
+                    time.sleep(self.cleanup_interval_hours * 3600)
+
+                    # Run cleanup
+                    self._cleanup_old_insights()
+
+                except Exception as e:
+                    print(f"Error in cleanup monitor: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+        # Create and start daemon thread
+        cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
+        cleanup_thread.start()
+        print(f"✓ AI Insights cleanup monitor started (runs every {self.cleanup_interval_hours} hours)")
+
+    def _cleanup_old_insights(self):
+        """
+        Clean up old markdown files from insights directories
+        Deletes files older than self.retention_days
+        """
+        print("\n" + "=" * 60)
+        print(f"AI Insights Cleanup: Starting cleanup process")
+        print(f"Retention period: {self.retention_days} days")
+        print("=" * 60)
+
+        cutoff_time = datetime.now() - timedelta(days=self.retention_days)
+        deleted_count = 0
+
+        # Base directory for insights
+        base_dir = 'data/ai_insights'
+
+        # Clean up global insights from data/ai_insights/all
+        global_dir = os.path.join(base_dir, 'all')
+        if os.path.exists(global_dir):
+            print(f"\nScanning: {global_dir}")
+            count = self._cleanup_directory(global_dir, cutoff_time)
+            deleted_count += count
+            print(f"  → Deleted {count} file(s) from global directory")
+
+        # Clean up user insights from all subdirectories of data/ai_insights/users
+        users_dir = os.path.join(base_dir, 'users')
+        if os.path.exists(users_dir):
+            print(f"\nScanning: {users_dir}")
+
+            # Iterate through all user directories
+            try:
+                for user_folder in os.listdir(users_dir):
+                    user_path = os.path.join(users_dir, user_folder)
+
+                    # Only process directories
+                    if os.path.isdir(user_path):
+                        print(f"  Checking user folder: {user_folder}")
+                        count = self._cleanup_directory(user_path, cutoff_time)
+                        deleted_count += count
+                        if count > 0:
+                            print(f"    → Deleted {count} file(s)")
+            except Exception as e:
+                print(f"  Error scanning users directory: {e}")
+
+        print("\n" + "=" * 60)
+        print(f"Cleanup completed: {deleted_count} total file(s) deleted")
+        print("=" * 60 + "\n")
+
+        return deleted_count
+
+    def _cleanup_directory(self, directory, cutoff_time):
+        """
+        Clean up old .md files from a specific directory
+
+        Args:
+            directory (str): Path to directory to clean
+            cutoff_time (datetime): Delete files older than this time
+
+        Returns:
+            int: Number of files deleted
+        """
+        deleted_count = 0
+
+        try:
+            for filename in os.listdir(directory):
+                # Only process .md files
+                if not filename.endswith('.md'):
+                    continue
+
+                filepath = os.path.join(directory, filename)
+
+                # Only process files, not directories
+                if not os.path.isfile(filepath):
+                    continue
+
+                try:
+                    # Get file modification time
+                    file_mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
+
+                    # Check if file is older than cutoff time
+                    if file_mtime < cutoff_time:
+                        # Delete the file
+                        os.remove(filepath)
+                        deleted_count += 1
+
+                        age_days = (datetime.now() - file_mtime).days
+                        print(f"    ✓ Deleted: {filename} (age: {age_days} days)")
+
+                except Exception as e:
+                    print(f"    ✗ Error processing {filename}: {e}")
+
+        except Exception as e:
+            print(f"  Error accessing directory {directory}: {e}")
+
+        return deleted_count
