@@ -12,8 +12,10 @@ import tempfile
 import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
-import threading
 import time
+import threading
+import json
+import base64
 
 
 class ViewRoutes(BaseRoutes):
@@ -38,6 +40,115 @@ class ViewRoutes(BaseRoutes):
 
         # Start the cleanup monitor in a background thread
         self._start_cleanup_monitor()
+
+    def _cleanup_old_files(self):
+        """
+        Clean up markdown files older than retention_days from:
+        - data/ai_insights/all/
+        - data/ai_insights/users/*/
+        """
+        try:
+            cutoff_time = time.time() - (self.retention_days * 24 * 60 * 60)
+            deleted_count = 0
+            base_dir = 'data/ai_insights'
+
+            print(f"[Cleanup] Starting cleanup: Removing files older than {self.retention_days} days")
+            print(f"[Cleanup] Cutoff date: {datetime.fromtimestamp(cutoff_time).strftime('%Y-%m-%d %H:%M:%S')}")
+
+            # Clean up global insights (data/ai_insights/all)
+            global_dir = os.path.join(base_dir, 'all')
+            if os.path.exists(global_dir):
+                deleted_count += self._cleanup_directory(global_dir, cutoff_time, 'Global')
+
+            # Clean up user insights (data/ai_insights/users/*)
+            users_dir = os.path.join(base_dir, 'users')
+            if os.path.exists(users_dir):
+                # Iterate through all user directories
+                for user_folder in os.listdir(users_dir):
+                    user_path = os.path.join(users_dir, user_folder)
+                    if os.path.isdir(user_path):
+                        deleted_count += self._cleanup_directory(user_path, cutoff_time, f'User:{user_folder}')
+
+            if deleted_count > 0:
+                print(f"[Cleanup] ✓ Completed: Deleted {deleted_count} old file(s)")
+            else:
+                print(f"[Cleanup] ✓ Completed: No old files to delete")
+
+            return deleted_count
+
+        except Exception as e:
+            print(f"[Cleanup] ✗ Error during cleanup: {e}")
+            import traceback
+            traceback.print_exc()
+            return 0
+
+    def _cleanup_directory(self, directory, cutoff_time, category):
+        """
+        Clean up old markdown files in a specific directory
+
+        Args:
+            directory (str): Directory path to clean
+            cutoff_time (float): Unix timestamp cutoff
+            category (str): Category name for logging
+
+        Returns:
+            int: Number of files deleted
+        """
+        deleted_count = 0
+
+        try:
+            if not os.path.exists(directory):
+                return 0
+
+            for filename in os.listdir(directory):
+                if filename.endswith('.md'):
+                    filepath = os.path.join(directory, filename)
+
+                    try:
+                        # Get file modification time
+                        file_mtime = os.path.getmtime(filepath)
+
+                        # Check if file is older than cutoff
+                        if file_mtime < cutoff_time:
+                            # Calculate age in days
+                            age_days = (time.time() - file_mtime) / (24 * 60 * 60)
+                            file_date = datetime.fromtimestamp(file_mtime).strftime('%Y-%m-%d')
+
+                            # Delete the file
+                            os.remove(filepath)
+                            deleted_count += 1
+                            print(f"[Cleanup]   Deleted [{category}]: {filename} (created: {file_date}, age: {age_days:.1f} days)")
+
+                    except Exception as e:
+                        print(f"[Cleanup]   Error deleting {filepath}: {e}")
+
+        except Exception as e:
+            print(f"[Cleanup] Error accessing directory {directory}: {e}")
+
+        return deleted_count
+
+    def _start_cleanup_monitor(self):
+        """Start background thread for periodic cleanup"""
+        def cleanup_worker():
+            # Run initial cleanup after a short delay
+            time.sleep(60)  # Wait 1 minute before first cleanup
+
+            while True:
+                try:
+                    self._cleanup_old_files()
+                    # Sleep for the configured interval (converted to seconds)
+                    time.sleep(self.cleanup_interval_hours * 3600)
+                except Exception as e:
+                    print(f"[Cleanup] Error in cleanup worker: {e}")
+                    # Wait a bit before retrying
+                    time.sleep(3600)  # Wait 1 hour on error
+
+        # Start background thread
+        cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True, name='AIInsightsCleanup')
+        cleanup_thread.start()
+        print(f"[Cleanup] ✓ Monitor started successfully")
+        print(f"[Cleanup]   - Will run every {self.cleanup_interval_hours} hour(s)")
+        print(f"[Cleanup]   - First cleanup in 1 minute, then every {self.cleanup_interval_hours} hour(s)")
 
     def register_routes(self):
         """Register all view routes"""
@@ -90,9 +201,20 @@ class ViewRoutes(BaseRoutes):
                         # Document name is filename without .md extension
                         document_name = filename[:-3] if filename.endswith('.md') else filename
 
-                        insights.append({
-                            'id': f"global_{filename}",
+                        # Create JSON-based ID
+                        id_data = {
                             'category': 'Global',
+                            'owner': 'admin',
+                            'document': filename
+                        }
+                        # Encode as base64 for URL safety
+                        id_json = json.dumps(id_data, separators=(',', ':'))
+                        id_encoded = base64.urlsafe_b64encode(id_json.encode()).decode()
+
+                        insights.append({
+                            'id': id_encoded,
+                            'category': 'Global',
+                            'owner': 'admin',
                             'document': document_name,
                             'filepath': filepath,
                             'filename': filename,
@@ -115,9 +237,20 @@ class ViewRoutes(BaseRoutes):
                         # Document name is filename without .md extension
                         document_name = filename[:-3] if filename.endswith('.md') else filename
 
-                        insights.append({
-                            'id': f"user_{filename}",
+                        # Create JSON-based ID
+                        id_data = {
                             'category': 'User',
+                            'owner': user_id,
+                            'document': filename
+                        }
+                        # Encode as base64 for URL safety
+                        id_json = json.dumps(id_data, separators=(',', ':'))
+                        id_encoded = base64.urlsafe_b64encode(id_json.encode()).decode()
+
+                        insights.append({
+                            'id': id_encoded,
+                            'category': 'User',
+                            'owner': user_id,
                             'document': document_name,
                             'filepath': filepath,
                             'filename': filename,
@@ -156,7 +289,7 @@ class ViewRoutes(BaseRoutes):
                 'total_pages': total_pages
             })
 
-        @self.app.route('/api/insight/<insight_id>')
+        @self.app.route('/api/insight/<path:insight_id>')
         @self.login_required
         def api_get_insight_content(insight_id):
             """API endpoint to fetch specific insight content from filesystem"""
@@ -164,35 +297,73 @@ class ViewRoutes(BaseRoutes):
 
             user_id = session.get('user_id')
 
-            # Parse insight_id (format: "global_filename.md" or "user_filename.md")
-            if insight_id.startswith('global_'):
-                filename = insight_id[7:]  # Remove "global_" prefix
-                filepath = os.path.join('data/ai_insights/all', filename)
-            elif insight_id.startswith('user_'):
-                filename = insight_id[5:]  # Remove "user_" prefix
-                filepath = os.path.join('data/ai_insights/users', user_id, filename)
-            else:
-                return jsonify({
-                    'success': False,
-                    'content': '# Error\n\nInvalid insight ID format.'
-                }), 400
-
-            # Read the markdown file
             try:
+                # Decode the JSON-based ID
+
+                try:
+                    id_json = base64.urlsafe_b64decode(insight_id.encode()).decode()
+                    id_data = json.loads(id_json)
+
+                    category = id_data.get('category')
+                    owner = id_data.get('owner')
+                    document = id_data.get('document')
+
+                    if not all([category, owner, document]):
+                        raise ValueError("Invalid ID structure")
+
+                except Exception as e:
+                    print(f"Error decoding insight ID: {e}")
+                    return jsonify({
+                        'success': False,
+                        'content': '# Error\n\nInvalid insight ID format.'
+                    }), 400
+
+                # Determine file path based on category and owner
+                base_dir = 'data/ai_insights'
+
+                if category == 'Global':
+                    filepath = os.path.join(base_dir, 'all', document)
+                elif category == 'User':
+                    # Verify user can only access their own insights
+                    if owner != user_id:
+                        return jsonify({
+                            'success': False,
+                            'content': '# Access Denied\n\nYou do not have permission to view this insight.'
+                        }), 403
+                    filepath = os.path.join(base_dir, 'users', owner, document)
+                else:
+                    return jsonify({
+                        'success': False,
+                        'content': '# Error\n\nInvalid category.'
+                    }), 400
+
+                # Read the file
                 if os.path.exists(filepath):
                     with open(filepath, 'r', encoding='utf-8') as f:
                         content = f.read()
+                    return jsonify({
+                        'success': True,
+                        'content': content,
+                        'category': category,
+                        'owner': owner,
+                        'document': document
+                    })
                 else:
-                    content = '# Insight Not Found\n\nThe requested insight could not be found.'
+                    return jsonify({
+                        'success': False,
+                        'content': '# Insight Not Found\n\nThe requested insight could not be found.'
+                    }), 404
+
             except Exception as e:
-                content = f'# Error Reading File\n\nCould not read the insight file: {str(e)}'
+                print(f"Error loading insight content: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({
+                    'success': False,
+                    'content': f'# Error\n\nFailed to load insight: {str(e)}'
+                }), 500
 
-            return jsonify({
-                'success': True,
-                'content': content
-            })
-
-        @self.app.route('/api/export-insight/<insight_id>')
+        @self.app.route('/api/export-insight/<path:insight_id>')
         @self.login_required
         def api_export_insight(insight_id):
             """API endpoint to export insight as Word document"""
@@ -200,21 +371,47 @@ class ViewRoutes(BaseRoutes):
 
             user_id = session.get('user_id')
 
-            # Parse insight_id and get filepath
-            if insight_id.startswith('global_'):
-                filename = insight_id[7:]  # Remove "global_" prefix
-                filepath = os.path.join('data/ai_insights/all', filename)
-            elif insight_id.startswith('user_'):
-                filename = insight_id[5:]  # Remove "user_" prefix
-                filepath = os.path.join('data/ai_insights/users', user_id, filename)
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Invalid insight ID format'
-                }), 400
-
-            # Read the markdown content
             try:
+                # Decode the JSON-based ID
+
+                try:
+                    id_json = base64.urlsafe_b64decode(insight_id.encode()).decode()
+                    id_data = json.loads(id_json)
+
+                    category = id_data.get('category')
+                    owner = id_data.get('owner')
+                    document = id_data.get('document')
+
+                    if not all([category, owner, document]):
+                        raise ValueError("Invalid ID structure")
+
+                except Exception as e:
+                    print(f"Error decoding insight ID: {e}")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Invalid insight ID format'
+                    }), 400
+
+                # Determine file path based on category and owner
+                base_dir = 'data/ai_insights'
+
+                if category == 'Global':
+                    filepath = os.path.join(base_dir, 'all', document)
+                elif category == 'User':
+                    # Verify user can only export their own insights
+                    if owner != user_id:
+                        return jsonify({
+                            'success': False,
+                            'error': 'Access denied: You can only export your own insights'
+                        }), 403
+                    filepath = os.path.join(base_dir, 'users', owner, document)
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Invalid category'
+                    }), 400
+
+                # Read the markdown content
                 if not os.path.exists(filepath):
                     return jsonify({
                         'success': False,
@@ -225,7 +422,7 @@ class ViewRoutes(BaseRoutes):
                     content = f.read()
 
                 # Get document name from filename (without .md extension)
-                document_name = filename[:-3] if filename.endswith('.md') else filename
+                document_name = document[:-3] if document.endswith('.md') else document
 
             except Exception as e:
                 return jsonify({
@@ -309,7 +506,7 @@ class ViewRoutes(BaseRoutes):
                 except:
                     pass
 
-        @self.app.route('/api/delete-insight/<insight_id>', methods=['DELETE'])
+        @self.app.route('/api/delete-insight/<path:insight_id>', methods=['DELETE'])
         @self.login_required
         def api_delete_insight(insight_id):
             """API endpoint to delete a user insight"""
@@ -317,19 +514,45 @@ class ViewRoutes(BaseRoutes):
 
             user_id = session.get('user_id')
 
-            # Only allow deleting user insights, not global ones
-            if not insight_id.startswith('user_'):
-                return jsonify({
-                    'success': False,
-                    'error': 'Only user insights can be deleted'
-                }), 403
-
-            # Parse insight_id to get filename
-            filename = insight_id[5:]  # Remove "user_" prefix
-            filepath = os.path.join('data/ai_insights/users', user_id, filename)
-
-            # Delete the file
             try:
+                # Decode the JSON-based ID
+
+                try:
+                    id_json = base64.urlsafe_b64decode(insight_id.encode()).decode()
+                    id_data = json.loads(id_json)
+
+                    category = id_data.get('category')
+                    owner = id_data.get('owner')
+                    document = id_data.get('document')
+
+                    if not all([category, owner, document]):
+                        raise ValueError("Invalid ID structure")
+
+                except Exception as e:
+                    print(f"Error decoding insight ID: {e}")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Invalid insight ID format'
+                    }), 400
+
+                # Only allow deleting user insights, not global ones
+                if category != 'User':
+                    return jsonify({
+                        'success': False,
+                        'error': 'Only user insights can be deleted'
+                    }), 403
+
+                # Verify user can only delete their own insights
+                if owner != user_id:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Access denied: You can only delete your own insights'
+                    }), 403
+
+                # Build filepath
+                filepath = os.path.join('data/ai_insights/users', owner, document)
+
+                # Delete the file
                 if not os.path.exists(filepath):
                     return jsonify({
                         'success': False,
@@ -337,6 +560,7 @@ class ViewRoutes(BaseRoutes):
                     }), 404
 
                 os.remove(filepath)
+                print(f"Deleted insight: {filepath}")
 
                 return jsonify({
                     'success': True,
@@ -345,6 +569,8 @@ class ViewRoutes(BaseRoutes):
 
             except Exception as e:
                 print(f"Error deleting insight: {e}")
+                import traceback
+                traceback.print_exc()
                 return jsonify({
                     'success': False,
                     'error': f'Error deleting file: {str(e)}'
