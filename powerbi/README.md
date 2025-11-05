@@ -78,7 +78,43 @@ pip install requests msal pandas
 
 ## Configuration
 
-Edit the `powerbi_export.py` file and update the following variables in the `main()` function:
+You have **three ways** to create your config.py file:
+
+### Option 1: Interactive Setup (Recommended) ⭐
+```bash
+python setup_config.py
+```
+This interactive script will guide you through creating config.py step by step.
+
+### Option 2: Copy from Example
+```bash
+# Windows Command Prompt:
+copy config_example.py config.py
+
+# Windows PowerShell:
+Copy-Item config_example.py config.py
+
+# Linux/Mac:
+cp config_example.py config.py
+```
+Then edit config.py with your values.
+
+### Option 3: Copy from Template
+```bash
+# Windows Command Prompt:
+copy config_template.py config.py
+
+# Windows PowerShell:
+Copy-Item config_template.py config.py
+
+# Linux/Mac:
+cp config_template.py config.py
+```
+Then edit config.py with your values.
+
+### Configuration Values
+
+Edit `config.py` with the following information:
 
 ```python
 # Your Azure AD app credentials
@@ -89,7 +125,15 @@ TENANT_ID = "your-tenant-id-here"          # Directory (tenant) ID
 # Your Power BI report details
 WORKSPACE_ID = None  # Workspace ID or None for 'My Workspace'
 REPORT_ID = "your-report-id-here"  # Report ID
-OUTPUT_FILE = "powerbi_report_export.csv"  # Output filename
+
+# Export Options
+EXPORT_FORMAT = "both"  # Options: "csv", "pdf", "both"
+CSV_OUTPUT_FILE = "powerbi_report_export.csv"
+PDF_OUTPUT_FILE = "powerbi_report_export.pdf"
+
+# Optional: Specific page(s) to export
+PAGE_NAME = None  # For CSV: single page name or None for all
+PAGE_NAMES = None  # For PDF: list like ['Page1', 'Page2'] or None for all
 ```
 
 ### Finding Your Report ID and Workspace ID
@@ -110,7 +154,7 @@ OUTPUT_FILE = "powerbi_report_export.csv"  # Output filename
 Run the script:
 
 ```bash
-python powerbi_export.py
+python run_export.py
 ```
 
 The script will:
@@ -118,7 +162,9 @@ The script will:
 2. List available workspaces
 3. List reports in the specified workspace
 4. List pages in the specified report
-5. Export the report to CSV format
+5. Export the report in the specified format(s) (CSV, PDF, or both)
+
+**For more detailed examples and use cases, see [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)**
 
 ### Advanced Usage
 
@@ -244,6 +290,16 @@ For more information, refer to:
 - [Power BI REST API Documentation](https://learn.microsoft.com/en-us/rest/api/power-bi/)
 - [Export Reports API](https://learn.microsoft.com/en-us/rest/api/power-bi/reports/export-to-file)
 
-## License
+## Copyright & License
 
-This code is provided as-is for educational and development purposes.
+**Copyright 2025-2030 all rights reserved**  
+**Author:** Ashutosh Sinha  
+**Email:** ajsinha@gmail.com
+
+This software is provided for educational and development purposes.
+
+## Support & Contact
+
+For questions, issues, or suggestions:
+- Email: ajsinha@gmail.com
+- Please include "Power BI Export Tool" in the subject line

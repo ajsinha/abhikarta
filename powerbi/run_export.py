@@ -9,6 +9,8 @@ This version loads credentials from config.py for better security
 Supports both CSV and PDF export formats
 """
 
+import sys
+import os
 from powerbi_export import PowerBIExporter
 
 # Try to import config, fallback to template if not found
@@ -24,11 +26,39 @@ try:
     PDF_OUTPUT_FILE = getattr(config, 'PDF_OUTPUT_FILE', 'powerbi_report_export.pdf')
     PAGE_NAME = getattr(config, 'PAGE_NAME', None)
     PAGE_NAMES = getattr(config, 'PAGE_NAMES', None)
-except ImportError:
-    print("ERROR: config.py not found!")
-    print("Please copy config_template.py to config.py and fill in your credentials.")
-    print("Example: cp config_template.py config.py")
-    exit(1)
+except ImportError as e:
+    print("\n" + "="*60)
+    print("ERROR: Cannot import config.py")
+    print("="*60)
+    print("\nThe config.py file is missing. You need to create it first.")
+    print("\n📋 Quick Fix:")
+    print("-" * 60)
+    
+    # Check if we're on Windows or Unix
+    if os.name == 'nt':  # Windows
+        print("1. Copy the template (Windows Command Prompt):")
+        print("   copy config_template.py config.py")
+        print("\n   Or in PowerShell:")
+        print("   Copy-Item config_template.py config.py")
+    else:  # Unix/Linux/Mac
+        print("1. Copy the template:")
+        print("   cp config_template.py config.py")
+    
+    print("\n2. Edit config.py with your credentials:")
+    print("   - CLIENT_ID")
+    print("   - CLIENT_SECRET")
+    print("   - TENANT_ID")
+    print("   - REPORT_ID")
+    print("   - WORKSPACE_ID (or leave as None)")
+    
+    print("\n3. Run this script again:")
+    print("   python run_export.py")
+    
+    print("\n" + "="*60)
+    print("💡 Tip: See README.md for Azure AD setup instructions")
+    print("="*60)
+    print(f"\nOriginal error: {str(e)}\n")
+    sys.exit(1)
 
 
 def main():
